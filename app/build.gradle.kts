@@ -7,6 +7,7 @@ plugins {
     alias(libs.plugins.ksp)
     alias(libs.plugins.kotlin.compose.compiler)
     alias(libs.plugins.google.services)
+    alias(libs.plugins.kotlin.serialization)
 }
 
 // Load local.properties
@@ -104,8 +105,12 @@ dependencies {
     implementation(libs.activity.compose)
     implementation(libs.navigation.compose)
 
+    // Kotlinx Serialization
+    implementation(libs.kotlinx.serialization.json)
+
     // Lifecycle
     implementation(libs.lifecycle.runtime.ktx)
+    implementation(libs.lifecycle.runtime.compose)
     implementation(libs.lifecycle.viewmodel.compose)
 
     // Room
@@ -125,7 +130,7 @@ dependencies {
     // Hilt
     implementation(libs.hilt)
     ksp(libs.hilt.compiler)
-    implementation(libs.hilt.lifecycle.viewmodel.compose)
+    implementation(libs.hilt.navigation.compose)
 
     // Timber
     implementation(libs.timber)
