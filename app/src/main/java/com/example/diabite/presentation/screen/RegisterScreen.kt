@@ -395,11 +395,24 @@ fun RegisterScreen(navController: NavController, viewModel: AuthViewModel = hilt
                         confirmPasswordError = confirmPassword.isEmpty()
                         passwordMatchError = password != confirmPassword
                         displayNameError = displayName.isEmpty()
-                        dateOfBirthError = dateOfBirth.isEmpty() || !isValidDate(dateOfBirth)
+
+                        // Validate date fields
+                        val day = dayOfBirth.toIntOrNull()
+                        val month = monthOfBirth.toIntOrNull()
+                        val year = yearOfBirth.toIntOrNull()
+
+                        dateOfBirthError = dayOfBirth.isEmpty() || monthOfBirth.isEmpty() || yearOfBirth.isEmpty() ||
+                                day == null || month == null || year == null ||
+                                day !in 1..31 || month !in 1..12 || year < 1900 || year > Calendar.getInstance().get(Calendar.YEAR) ||
+                                !isValidDateComponents(day, month, year)
+
                         biologicalSexError = biologicalSex.isEmpty()
 
                         if (!emailError && !passwordError && !confirmPasswordError && !passwordMatchError &&
                             !displayNameError && !dateOfBirthError && !biologicalSexError) {
+                            // Combine date components into MM/dd/yyyy format
+                            val dateOfBirth = String.format(Locale.getDefault(), "%02d/%02d/%04d", month, day, year)
+
                             // Navigate to medical conditions
                             navController.navigate(
                                 Route.MedicalConditions(
@@ -452,6 +465,21 @@ private fun isValidDate(dateString: String): Boolean {
         format.isLenient = false
         format.parse(dateString)
         true
+    } catch (e: Exception) {
+        false
+    }
+}
+
+// Helper function to validate individual date components
+private fun isValidDateComponents(day: Int, month: Int, year: Int): Boolean {
+    return try {
+        // Check if the date components form a valid date
+        val calendar = Calendar.getInstance()
+        calendar.setLenient(false)
+        calendar.set(year, month - 1, day) // Month is 0-based in Calendar
+        calendar.get(Calendar.YEAR) == year &&
+        calendar.get(Calendar.MONTH) == month - 1 &&
+        calendar.get(Calendar.DAY_OF_MONTH) == day
     } catch (e: Exception) {
         false
     }
