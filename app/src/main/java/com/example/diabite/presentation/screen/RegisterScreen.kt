@@ -1,6 +1,7 @@
 package com.example.diabite.presentation.screen
 
-import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -10,25 +11,28 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -39,55 +43,94 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
+import com.example.diabite.R
 import com.example.diabite.common.Route
 import com.example.diabite.presentation.theme.TextDarkGray
 import com.example.diabite.presentation.viewmodel.AuthViewModel
-import com.example.diabite.util.AppError
 import com.example.diabite.util.Resource
+import com.google.android.gms.auth.api.signin.GoogleSignIn
+import com.google.android.gms.auth.api.signin.GoogleSignInOptions
+import com.google.android.gms.common.api.ApiException
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Locale
+import android.app.DatePickerDialog
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RegisterScreen(navController: NavController, viewModel: AuthViewModel = hiltViewModel()) {
 
-    // State for all fields
-    var displayName by remember { mutableStateOf("") }
+    // Simple state for initial registration
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var confirmPassword by remember { mutableStateOf("") }
-    var dateOfBirth by remember { mutableStateOf("") }
-    var biologicalSex by remember { mutableStateOf("") }
-    var diabetesType by remember { mutableStateOf("") }
-
-    // Dropdown states
-    var sexExpanded by remember { mutableStateOf(false) }
-    var diabetesExpanded by remember { mutableStateOf(false) }
+    var passwordVisible by remember { mutableStateOf(false) }
+    var confirmPasswordVisible by remember { mutableStateOf(false) }
 
     // State for validation
-    var nameError by remember { mutableStateOf(false) }
     var emailError by remember { mutableStateOf(false) }
     var passwordError by remember { mutableStateOf(false) }
     var confirmPasswordError by remember { mutableStateOf(false) }
     var passwordMatchError by remember { mutableStateOf(false) }
 
-    val context = LocalContext.current
-    val signUpState by viewModel.signUpState.collectAsState()
+    // Additional state for comprehensive registration
+    var displayName by remember { mutableStateOf("") }
+    var dayOfBirth by remember { mutableStateOf("") }
+    var monthOfBirth by remember { mutableStateOf("") }
+    var yearOfBirth by remember { mutableStateOf("") }
+    var biologicalSex by remember { mutableStateOf("") }
+    var sexExpanded by remember { mutableStateOf(false) }
 
-    // Handle sign up state changes
-    LaunchedEffect(signUpState) {
-        when (signUpState) {
+    // Additional validation state
+    var displayNameError by remember { mutableStateOf(false) }
+    var dateOfBirthError by remember { mutableStateOf(false) }
+    var biologicalSexError by remember { mutableStateOf(false) }
+
+    // Biological sex options
+    val biologicalSexOptions = listOf("Male", "Female", "Other", "Prefer not to say")
+
+    val context = LocalContext.current
+    val googleSignInState by viewModel.googleSignInState.collectAsState()
+
+    val googleSignInLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult(),
+        onResult = {
+            val task = GoogleSignIn.getSignedInAccountFromIntent(it.data)
+            try {
+                val account = task.getResult(ApiException::class.java)
+                if (account != null) {
+                    viewModel.googleSignIn(account.idToken!!)
+                }
+            } catch (e: ApiException) {
+                // Handle Google Sign-In error
+            }
+        }
+    )
+
+    val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+        .requestIdToken(context.getString(R.string.default_web_client_id))
+        .requestEmail()
+        .build()
+
+    val googleSignInClient = GoogleSignIn.getClient(context, gso)
+
+    // Handle Google sign-in state changes
+    LaunchedEffect(googleSignInState) {
+        when (googleSignInState) {
             is Resource.Success<*> -> {
-                Toast.makeText(context, "Account created successfully!", Toast.LENGTH_SHORT).show()
-                navController.navigate(Route.Login) {
+                navController.navigate(Route.Home) {
                     popUpTo(Route.Signup) { inclusive = true }
                 }
             }
@@ -97,9 +140,6 @@ fun RegisterScreen(navController: NavController, viewModel: AuthViewModel = hilt
             else -> {}
         }
     }
-
-    val sexOptions = listOf("Male", "Female", "Other", "Prefer not to say")
-    val diabetesOptions = listOf("Type 1", "Type 2", "Gestational", "Other", "None")
 
     Box(
         modifier = Modifier
@@ -117,13 +157,13 @@ fun RegisterScreen(navController: NavController, viewModel: AuthViewModel = hilt
                 verticalArrangement = Arrangement.Center,
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                // Back Button (Good UX)
+                // Back Button
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.Start
                 ) {
                     IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.Filled.ArrowBack, contentDescription = "Back to Login", tint = MaterialTheme.colorScheme.primary)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back to Login", tint = MaterialTheme.colorScheme.primary)
                     }
                 }
 
@@ -145,20 +185,6 @@ fun RegisterScreen(navController: NavController, viewModel: AuthViewModel = hilt
 
                 Spacer(modifier = Modifier.height(32.dp))
 
-                // Display Name Field
-                OutlinedTextField(
-                    value = displayName,
-                    onValueChange = { displayName = it; nameError = false },
-                    label = { Text("Full Name") },
-                    placeholder = { Text("Enter your full name") },
-                    modifier = Modifier.fillMaxWidth(),
-                    leadingIcon = { Icon(Icons.Default.Person, contentDescription = "Name Icon") },
-                    singleLine = true,
-                    isError = nameError,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
-                    supportingText = { if (nameError) Text("Name is required") }
-                )
-
                 // Email Field
                 OutlinedTextField(
                     value = email,
@@ -173,16 +199,156 @@ fun RegisterScreen(navController: NavController, viewModel: AuthViewModel = hilt
                     supportingText = { if (emailError) Text("Valid email is required") }
                 )
 
-                // Date of Birth Field
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Password Field
                 OutlinedTextField(
-                    value = dateOfBirth,
-                    onValueChange = { dateOfBirth = it },
-                    label = { Text("Date of Birth (Optional)") },
-                    placeholder = { Text("MM/DD/YYYY") },
+                    value = password,
+                    onValueChange = { password = it; passwordError = false; passwordMatchError = false },
+                    label = { Text("Password") },
+                    placeholder = { Text("Create a password (min 6 characters)") },
                     modifier = Modifier.fillMaxWidth(),
+                    leadingIcon = { Icon(Icons.Default.Lock, contentDescription = "Password Icon") },
+                    trailingIcon = {
+                        IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                            Icon(
+                                imageVector = if (passwordVisible) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
+                                contentDescription = if (passwordVisible) "Hide password" else "Show password"
+                            )
+                        }
+                    },
                     singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text)
+                    isError = passwordError || passwordMatchError,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                    visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                    supportingText = {
+                        if (passwordError) Text("Password must be at least 6 characters")
+                        else if (passwordMatchError) Text("Passwords do not match", color = MaterialTheme.colorScheme.error)
+                    }
                 )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Confirm Password Field
+                OutlinedTextField(
+                    value = confirmPassword,
+                    onValueChange = { confirmPassword = it; confirmPasswordError = false; passwordMatchError = false },
+                    label = { Text("Confirm Password") },
+                    placeholder = { Text("Re-enter password") },
+                    modifier = Modifier.fillMaxWidth(),
+                    leadingIcon = { Icon(Icons.Default.Lock, contentDescription = "Confirm Password Icon") },
+                    trailingIcon = {
+                        IconButton(onClick = { confirmPasswordVisible = !confirmPasswordVisible }) {
+                            Icon(
+                                imageVector = if (confirmPasswordVisible) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
+                                contentDescription = if (confirmPasswordVisible) "Hide password" else "Show password"
+                            )
+                        }
+                    },
+                    singleLine = true,
+                    isError = confirmPasswordError || passwordMatchError,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                    visualTransformation = if (confirmPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                    supportingText = { if (confirmPasswordError) Text("Confirmation is required") }
+                )
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // Additional fields for comprehensive registration
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Display Name Field
+                OutlinedTextField(
+                    value = displayName,
+                    onValueChange = { displayName = it; displayNameError = false },
+                    label = { Text("Full Name") },
+                    placeholder = { Text("Enter your full name") },
+                    modifier = Modifier.fillMaxWidth(),
+                    leadingIcon = { Icon(Icons.Default.Person, contentDescription = "Name Icon") },
+                    singleLine = true,
+                    isError = displayNameError,
+                    supportingText = { if (displayNameError) Text("Name is required") }
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Date of Birth Fields - Day, Month, Year
+                Text(
+                    "Date of Birth",
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.fillMaxWidth(),
+                    textAlign = TextAlign.Start
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    // Day Field
+                    OutlinedTextField(
+                        value = dayOfBirth,
+                        onValueChange = {
+                            if (it.length <= 2 && it.all { char -> char.isDigit() }) {
+                                dayOfBirth = it
+                                dateOfBirthError = false
+                            }
+                        },
+                        label = { Text("Day") },
+                        placeholder = { Text("DD") },
+                        modifier = Modifier.weight(1f),
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        textStyle = androidx.compose.ui.text.TextStyle(textAlign = TextAlign.Center)
+                    )
+
+                    // Month Field
+                    OutlinedTextField(
+                        value = monthOfBirth,
+                        onValueChange = {
+                            if (it.length <= 2 && it.all { char -> char.isDigit() }) {
+                                monthOfBirth = it
+                                dateOfBirthError = false
+                            }
+                        },
+                        label = { Text("Month") },
+                        placeholder = { Text("MM") },
+                        modifier = Modifier.weight(1f),
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        textStyle = androidx.compose.ui.text.TextStyle(textAlign = TextAlign.Center)
+                    )
+
+                    // Year Field
+                    OutlinedTextField(
+                        value = yearOfBirth,
+                        onValueChange = {
+                            if (it.length <= 4 && it.all { char -> char.isDigit() }) {
+                                yearOfBirth = it
+                                dateOfBirthError = false
+                            }
+                        },
+                        label = { Text("Year") },
+                        placeholder = { Text("YYYY") },
+                        modifier = Modifier.weight(1.5f),
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        textStyle = androidx.compose.ui.text.TextStyle(textAlign = TextAlign.Center)
+                    )
+                }
+
+                if (dateOfBirthError) {
+                    Text(
+                        "Please enter a valid date of birth",
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.fillMaxWidth(),
+                        textAlign = TextAlign.Start
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
 
                 // Biological Sex Dropdown
                 ExposedDropdownMenuBox(
@@ -193,153 +359,78 @@ fun RegisterScreen(navController: NavController, viewModel: AuthViewModel = hilt
                         value = biologicalSex,
                         onValueChange = {},
                         readOnly = true,
-                        label = { Text("Biological Sex (Optional)") },
+                        label = { Text("Biological Sex") },
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = sexExpanded) },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .menuAnchor()
+                            .menuAnchor(),
+                        isError = biologicalSexError,
+                        supportingText = { if (biologicalSexError) Text("Please select your biological sex") }
                     )
                     ExposedDropdownMenu(
                         expanded = sexExpanded,
                         onDismissRequest = { sexExpanded = false }
                     ) {
-                        sexOptions.forEach { option ->
+                        biologicalSexOptions.forEach { option ->
                             DropdownMenuItem(
                                 text = { Text(option) },
                                 onClick = {
                                     biologicalSex = option
                                     sexExpanded = false
+                                    biologicalSexError = false
                                 }
                             )
                         }
                     }
-                }
-
-                // Diabetes Type Dropdown
-                ExposedDropdownMenuBox(
-                    expanded = diabetesExpanded,
-                    onExpandedChange = { diabetesExpanded = !diabetesExpanded }
-                ) {
-                    OutlinedTextField(
-                        value = diabetesType,
-                        onValueChange = {},
-                        readOnly = true,
-                        label = { Text("Diabetes Type (Optional)") },
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = diabetesExpanded) },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .menuAnchor()
-                    )
-                    ExposedDropdownMenu(
-                        expanded = diabetesExpanded,
-                        onDismissRequest = { diabetesExpanded = false }
-                    ) {
-                        diabetesOptions.forEach { option ->
-                            DropdownMenuItem(
-                                text = { Text(option) },
-                                onClick = {
-                                    diabetesType = option
-                                    diabetesExpanded = false
-                                }
-                            )
-                        }
-                    }
-                }
-
-                // Password Field
-                OutlinedTextField(
-                    value = password,
-                    onValueChange = { password = it; passwordError = false; passwordMatchError = false },
-                    label = { Text("Password") },
-                    placeholder = { Text("Create a password (min 6 characters)") },
-                    modifier = Modifier.fillMaxWidth(),
-                    leadingIcon = { Icon(Icons.Default.Lock, contentDescription = "Password Icon") },
-                    singleLine = true,
-                    isError = passwordError || passwordMatchError,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                    visualTransformation = PasswordVisualTransformation(),
-                    supportingText = {
-                        if (passwordError) Text("Password is required")
-                        else if (passwordMatchError) Text("Passwords do not match", color = MaterialTheme.colorScheme.error)
-                    }
-                )
-
-                // Confirm Password Field
-                OutlinedTextField(
-                    value = confirmPassword,
-                    onValueChange = { confirmPassword = it; confirmPasswordError = false; passwordMatchError = false },
-                    label = { Text("Confirm Password") },
-                    placeholder = { Text("Re-enter password") },
-                    modifier = Modifier.fillMaxWidth(),
-                    leadingIcon = { Icon(Icons.Default.Lock, contentDescription = "Confirm Password Icon") },
-                    singleLine = true,
-                    isError = confirmPasswordError || passwordMatchError,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                    visualTransformation = PasswordVisualTransformation(),
-                    supportingText = { if (confirmPasswordError) Text("Confirmation is required") }
-                )
-
-                // Error message
-                if (signUpState is Resource.Error<*>) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    val appError = (signUpState as Resource.Error<*>).error
-                    val errorMessage = when (appError) {
-                        is AppError.InvalidPasswordError -> "Password should be at least 6 characters"
-                        is AppError.UserAlreadyExistsError -> "An account with this email already exists"
-                        is AppError.InvalidEmailError -> "Invalid email format"
-                        is AppError.NetworkError -> "Network error. Please check your connection"
-                        else -> appError?.userMessage ?: "An unknown error occurred"
-                    }
-                    Text(
-                        text = errorMessage,
-                        color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodySmall,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.fillMaxWidth()
-                    )
                 }
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                // Sign Up Button
+                // Sign Up Button - Navigate to medical conditions
                 Button(
                     onClick = {
-                        // Validation logic
-                        nameError = displayName.isEmpty()
+                        // Comprehensive validation
                         emailError = email.isEmpty() || !android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches()
                         passwordError = password.length < 6
                         confirmPasswordError = confirmPassword.isEmpty()
                         passwordMatchError = password != confirmPassword
+                        displayNameError = displayName.isEmpty()
+                        dateOfBirthError = dateOfBirth.isEmpty() || !isValidDate(dateOfBirth)
+                        biologicalSexError = biologicalSex.isEmpty()
 
-                        if (!nameError && !emailError && !passwordError && !confirmPasswordError && !passwordMatchError) {
-                            val primaryConditions = if (diabetesType.isNotEmpty() && diabetesType != "None") {
-                                listOf("Diabetes ($diabetesType)")
-                            } else {
-                                emptyList()
-                            }
-
-                            viewModel.signUp(
-                                email = email,
-                                password = password,
-                                displayName = displayName,
-                                dateOfBirth = dateOfBirth,
-                                biologicalSex = biologicalSex.lowercase(),
-                                primaryConditions = primaryConditions,
-                                diabetesType = diabetesType.lowercase().replace(" ", "")
+                        if (!emailError && !passwordError && !confirmPasswordError && !passwordMatchError &&
+                            !displayNameError && !dateOfBirthError && !biologicalSexError) {
+                            // Navigate to medical conditions
+                            navController.navigate(
+                                Route.MedicalConditions(
+                                    email = email,
+                                    password = password,
+                                    displayName = displayName,
+                                    dateOfBirth = dateOfBirth,
+                                    biologicalSex = biologicalSex
+                                )
                             )
                         }
                     },
-                    modifier = Modifier.fillMaxWidth().height(48.dp),
-                    enabled = signUpState !is Resource.Loading<*>
+                    modifier = Modifier.fillMaxWidth().height(48.dp)
                 ) {
-                    if (signUpState is Resource.Loading<*>) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(20.dp),
-                            color = MaterialTheme.colorScheme.onPrimary
-                        )
-                    } else {
-                        Text("Create Account")
-                    }
+                    Text("Continue to Medical Conditions")
+                }
+
+                // Google Sign-In Button
+                Spacer(modifier = Modifier.height(16.dp))
+                OutlinedButton(
+                    onClick = {
+                        googleSignInLauncher.launch(googleSignInClient.signInIntent)
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(48.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = Color.Black
+                    )
+                ) {
+                    Text("Continue with Google")
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -349,16 +440,19 @@ fun RegisterScreen(navController: NavController, viewModel: AuthViewModel = hilt
                     Text("Already have an account? Login", color = MaterialTheme.colorScheme.primary,
                         style = MaterialTheme.typography.bodySmall)
                 }
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                TextButton(onClick = {
-                    navController.navigate(Route.BasicInfo())
-                }) {
-                    Text("Complete Registration →", color = MaterialTheme.colorScheme.secondary,
-                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold))
-                }
             }
         }
+    }
+}
+
+// Helper function to validate date format
+private fun isValidDate(dateString: String): Boolean {
+    return try {
+        val format = SimpleDateFormat("MM/dd/yyyy", Locale.getDefault())
+        format.isLenient = false
+        format.parse(dateString)
+        true
+    } catch (e: Exception) {
+        false
     }
 }

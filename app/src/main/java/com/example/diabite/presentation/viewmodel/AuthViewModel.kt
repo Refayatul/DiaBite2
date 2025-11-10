@@ -181,19 +181,17 @@ class AuthViewModel @Inject constructor(
                                     diabetesMedications = if (diabetesMedications.isNotEmpty()) diabetesMedications else emptyList()
                                 )
 
-                                // Save profile to Firestore
-                                authRepository.updateUserProfile(signedUpUser.copy(
-                                    uid = signedUpUser.uid,
-                                    email = email
-                                )).collect { profileResource ->
+                                // Save UserProfile to Firestore
+                                authRepository.saveUserProfile(userProfile).collect { profileResource ->
                                     when (profileResource) {
                                         is Resource.Success -> {
+                                            Timber.d("UserProfile saved successfully")
                                             _currentUser.value = signedUpUser
                                             _signUpState.value = Resource.success(signedUpUser)
                                         }
                                         is Resource.Error -> {
                                             // Profile save failed, but user was created
-                                            Timber.w(profileResource.error?.cause, "Profile save failed, but user was created")
+                                            Timber.w(profileResource.error?.cause, "UserProfile save failed, but user was created")
                                             _currentUser.value = signedUpUser
                                             _signUpState.value = Resource.success(signedUpUser)
                                         }

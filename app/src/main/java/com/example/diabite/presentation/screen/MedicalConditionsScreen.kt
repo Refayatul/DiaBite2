@@ -26,6 +26,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -41,6 +43,7 @@ import androidx.navigation.NavController
 import com.example.diabite.common.Route
 import com.example.diabite.presentation.theme.TextDarkGray
 import com.example.diabite.presentation.viewmodel.AuthViewModel
+import com.example.diabite.util.Resource
 
 @Composable
 fun MedicalConditionsScreen(
@@ -53,6 +56,12 @@ fun MedicalConditionsScreen(
     authViewModel: AuthViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
+    val signUpState by authViewModel.signUpState.collectAsState()
+
+    // Reset signup state when entering this screen to prevent unwanted navigation
+    LaunchedEffect(Unit) {
+        authViewModel.resetAuthState()
+    }
 
     // Medical conditions state
     var selectedConditions by remember { mutableStateOf(setOf<String>()) }
@@ -79,6 +88,22 @@ fun MedicalConditionsScreen(
 
     val hasDiabetesSelected = selectedConditions.any { condition ->
         diabetesConditions.contains(condition)
+    }
+
+    // Handle sign up state changes
+    LaunchedEffect(signUpState) {
+        when (signUpState) {
+            is Resource.Success<*> -> {
+                Toast.makeText(context, "Account created successfully!", Toast.LENGTH_SHORT).show()
+                navController.navigate(Route.Home) {
+                    popUpTo(Route.Login) { inclusive = true }
+                }
+            }
+            is Resource.Error<*> -> {
+                // Error is handled in the UI below
+            }
+            else -> {}
+        }
     }
 
     Box(
@@ -216,7 +241,10 @@ fun MedicalConditionsScreen(
                                         displayName = displayName,
                                         dateOfBirth = dateOfBirth,
                                         biologicalSex = biologicalSex,
-                                        primaryConditions = selectedConditions.toList()
+                                        primaryConditions = selectedConditions.toList(),
+                                        diabetesType = "",
+                                        selectedMedications = emptyList(),
+                                        otherMedication = ""
                                     )
                                 )
                             } else {

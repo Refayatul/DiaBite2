@@ -19,12 +19,16 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -47,6 +51,7 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
@@ -67,6 +72,8 @@ fun LoginScreen(navController: NavController, viewModel: AuthViewModel = hiltVie
 
     var useremail by remember { mutableStateOf("") }
     var userpass by remember { mutableStateOf("") }
+    var passwordVisible by remember { mutableStateOf(false) }
+    var isLoginInProgress by remember { mutableStateOf(false) }
 
     // State for interactive validation/error feedback
     var emailError by remember { mutableStateOf(false) }
@@ -103,11 +110,13 @@ fun LoginScreen(navController: NavController, viewModel: AuthViewModel = hiltVie
     LaunchedEffect(loginState) {
         when (loginState) {
             is Resource.Success<*> -> {
+                isLoginInProgress = false
                 navController.navigate(Route.Home) {
                     popUpTo(Route.Login) { inclusive = true }
                 }
             }
             is Resource.Error<*> -> {
+                isLoginInProgress = false
                 // Error is handled in the UI below
             }
             else -> {}
@@ -210,9 +219,17 @@ fun LoginScreen(navController: NavController, viewModel: AuthViewModel = hiltVie
                     placeholder = { Text("Enter your Password") },
                     modifier = Modifier.fillMaxWidth(),
                     leadingIcon = { Icon(Icons.Default.Lock, contentDescription = "Password Icon") },
+                    trailingIcon = {
+                        IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                            Icon(
+                                imageVector = if (passwordVisible) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
+                                contentDescription = if (passwordVisible) "Hide password" else "Show password"
+                            )
+                        }
+                    },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                    visualTransformation = PasswordVisualTransformation(),
+                    visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                     isError = passwordError,
                     supportingText = {
                         if (passwordError) {
@@ -230,15 +247,16 @@ fun LoginScreen(navController: NavController, viewModel: AuthViewModel = hiltVie
                         passwordError = userpass.isEmpty()
 
                         if (!emailError && !passwordError) {
+                            isLoginInProgress = true
                             viewModel.login(useremail, userpass)
                         }
                     },
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(48.dp),
-                    enabled = loginState !is Resource.Loading<*>
+                    enabled = !isLoginInProgress
                 ) {
-                    if (loginState is Resource.Loading<*>) {
+                    if (isLoginInProgress) {
                         CircularProgressIndicator(
                             modifier = Modifier.size(20.dp),
                             color = MaterialTheme.colorScheme.onPrimary

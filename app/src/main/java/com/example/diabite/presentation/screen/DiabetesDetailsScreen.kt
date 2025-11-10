@@ -63,15 +63,18 @@ fun DiabetesDetailsScreen(
     dateOfBirth: String,
     biologicalSex: String,
     primaryConditions: List<String>,
+    diabetesType: String = "",
+    selectedMedications: List<String> = emptyList(),
+    otherMedication: String = "",
     authViewModel: AuthViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
-    val authState by authViewModel.authState.collectAsState()
+    val signUpState by authViewModel.signUpState.collectAsState()
 
-    // Diabetes details state
-    var diabetesType by remember { mutableStateOf("") }
-    var selectedMedications by remember { mutableStateOf(setOf<String>()) }
-    var otherMedication by remember { mutableStateOf("") }
+    // Diabetes details state - initialize with navigation parameters
+    var diabetesTypeState by remember { mutableStateOf(diabetesType) }
+    var selectedMedicationsState by remember { mutableStateOf(selectedMedications.toSet()) }
+    var otherMedicationState by remember { mutableStateOf(otherMedication) }
 
     var typeExpanded by remember { mutableStateOf(false) }
 
@@ -98,9 +101,9 @@ fun DiabetesDetailsScreen(
         "SGLT2 inhibitors"
     )
 
-    // Handle auth state changes
-    LaunchedEffect(authState) {
-        when (authState) {
+    // Handle sign up state changes
+    LaunchedEffect(signUpState) {
+        when (signUpState) {
             is Resource.Success<*> -> {
                 Toast.makeText(context, "Account created successfully!", Toast.LENGTH_SHORT).show()
                 navController.navigate(Route.Home) {
@@ -167,7 +170,7 @@ fun DiabetesDetailsScreen(
                     onExpandedChange = { typeExpanded = !typeExpanded }
                 ) {
                     OutlinedTextField(
-                        value = diabetesType,
+                        value = diabetesTypeState,
                         onValueChange = {},
                         readOnly = true,
                         label = { Text("Diabetes Type") },
@@ -186,7 +189,7 @@ fun DiabetesDetailsScreen(
                             DropdownMenuItem(
                                 text = { Text(option) },
                                 onClick = {
-                                    diabetesType = option
+                                    diabetesTypeState = option
                                     typeExpanded = false
                                     diabetesTypeError = false
                                 }
@@ -219,12 +222,12 @@ fun DiabetesDetailsScreen(
                 commonMedications.forEach { medication ->
                     MedicationCheckbox(
                         medication = medication,
-                        isSelected = selectedMedications.contains(medication),
+                        isSelected = selectedMedicationsState.contains(medication),
                         onCheckedChange = { checked ->
-                            selectedMedications = if (checked) {
-                                selectedMedications + medication
+                            selectedMedicationsState = if (checked) {
+                                selectedMedicationsState + medication
                             } else {
-                                selectedMedications - medication
+                                selectedMedicationsState - medication
                             }
                         }
                     )
@@ -234,8 +237,8 @@ fun DiabetesDetailsScreen(
 
                 // Other medication field
                 OutlinedTextField(
-                    value = otherMedication,
-                    onValueChange = { otherMedication = it },
+                    value = otherMedicationState,
+                    onValueChange = { otherMedicationState = it },
                     label = { Text("Other Medication (Optional)") },
                     placeholder = { Text("Enter other medication name") },
                     modifier = Modifier.fillMaxWidth(),
@@ -253,9 +256,9 @@ fun DiabetesDetailsScreen(
                 )
 
                 // Error message
-                if (authState is Resource.Error<*>) {
+                if (signUpState is Resource.Error<*>) {
                     Spacer(modifier = Modifier.height(8.dp))
-                    val errorMessage = (authState as Resource.Error<*>).error?.userMessage ?: "An error occurred during registration"
+                    val errorMessage = (signUpState as Resource.Error<*>).error?.userMessage ?: "An error occurred during registration"
                     Text(
                         text = errorMessage,
                         color = MaterialTheme.colorScheme.error,
@@ -281,29 +284,13 @@ fun DiabetesDetailsScreen(
 
                     Button(
                         onClick = {
-                            diabetesTypeError = diabetesType.isEmpty()
+                            diabetesTypeError = diabetesTypeState.isEmpty()
 
                             if (!diabetesTypeError) {
-                                val allMedications = selectedMedications.toMutableList()
-                                if (otherMedication.isNotEmpty()) {
-                                    allMedications.add(otherMedication)
+                                val allMedications = selectedMedicationsState.toMutableList()
+                                if (otherMedicationState.isNotEmpty()) {
+                                    allMedications.add(otherMedicationState)
                                 }
-
-                                // Create UserProfile and complete registration
-                                val userProfile = UserProfile(
-                                    email = email,
-                                    displayName = displayName,
-                                    dateOfBirth = try {
-                                        java.text.SimpleDateFormat("MM/dd/yyyy", java.util.Locale.getDefault())
-                                            .parse(dateOfBirth)
-                                    } catch (e: Exception) {
-                                        null
-                                    },
-                                    biologicalSex = biologicalSex,
-                                    primaryConditions = primaryConditions,
-                                    diabetesType = diabetesType,
-                                    diabetesMedications = allMedications
-                                )
 
                                 // Call signUpWithProfile to save complete profile
                                 authViewModel.signUpWithProfile(
@@ -313,7 +300,7 @@ fun DiabetesDetailsScreen(
                                     dateOfBirth = dateOfBirth,
                                     biologicalSex = biologicalSex,
                                     primaryConditions = primaryConditions,
-                                    diabetesType = diabetesType,
+                                    diabetesType = diabetesTypeState,
                                     diabetesMedications = allMedications
                                 )
                             } else {
@@ -321,9 +308,9 @@ fun DiabetesDetailsScreen(
                             }
                         },
                         modifier = Modifier.weight(1f).height(48.dp),
-                        enabled = authState !is Resource.Loading<*>
+                        enabled = signUpState !is Resource.Loading<*>
                     ) {
-                        if (authState is Resource.Loading<*>) {
+                        if (signUpState is Resource.Loading<*>) {
                             androidx.compose.material3.CircularProgressIndicator(
                                 modifier = Modifier.padding(4.dp),
                                 color = MaterialTheme.colorScheme.onPrimary

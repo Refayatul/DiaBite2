@@ -9,10 +9,10 @@ import kotlinx.serialization.Serializable
 sealed interface Route {
     // Authentication Flow
     @Serializable
-    object Login : Route
+    data object Login : Route
 
     @Serializable
-    object Signup : Route
+    data object Signup : Route
 
     // Multi-step Registration Flow
     @Serializable
@@ -34,12 +34,15 @@ sealed interface Route {
         val displayName: String,
         val dateOfBirth: String,
         val biologicalSex: String,
-        val primaryConditions: List<String>
+        val primaryConditions: List<String>,
+        val diabetesType: String = "",
+        val selectedMedications: List<String> = emptyList(),
+        val otherMedication: String = ""
     ) : Route
 
     // Main App Flow (Home Dashboard)
     @Serializable
-    object Home : Route
+    data object Home : Route
 
     // Legacy route for backward compatibility
     @Serializable
@@ -47,18 +50,18 @@ sealed interface Route {
 
     // Core Feature Screens, navigated to from the HomeScreen dashboard
     @Serializable
-    object SearchFood : Route
+    data object SearchFood : Route
 
     @Serializable
     data class FoodDetail(val foodId: String) : Route
 
     @Serializable
-    object AISuggestions : Route
+    data object AISuggestions : Route
 
     @Serializable
-    object TypeInfo : Route
+    data object TypeInfo : Route
 
     // Settings and Profile Management
     @Serializable
-    object Settings : Route
+    data object Settings : Route
 }

@@ -157,6 +157,18 @@ class AuthRepositoryImpl @Inject constructor(
         }
     }
 
+    override fun saveUserProfile(userProfile: com.example.diabite.data.model.UserProfile): Flow<Resource<Unit>> = flow {
+        emit(Resource.loading())
+
+        try {
+            firestore.collection("userProfiles").document(userProfile.uid).set(userProfile).await()
+            emit(Resource.success(Unit))
+        } catch (e: Exception) {
+            Timber.e(e, "UserProfile save failed")
+            emit(Resource.firebaseError(e))
+        }
+    }
+
     override fun resetPassword(email: String): Flow<Resource<Unit>> = flow {
         emit(Resource.loading())
 
