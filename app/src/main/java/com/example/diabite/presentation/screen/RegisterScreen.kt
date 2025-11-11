@@ -2,6 +2,7 @@ package com.example.diabite.presentation.screen
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -25,6 +27,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
@@ -63,6 +66,7 @@ import com.example.diabite.util.Resource
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.android.gms.common.api.ApiException
+import timber.log.Timber
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
@@ -110,11 +114,16 @@ fun RegisterScreen(navController: NavController, viewModel: AuthViewModel = hilt
             val task = GoogleSignIn.getSignedInAccountFromIntent(it.data)
             try {
                 val account = task.getResult(ApiException::class.java)
-                if (account != null) {
+                if (account != null && account.idToken != null) {
                     viewModel.googleSignIn(account.idToken!!)
+                } else {
+                    // Reset loading state and show error
+                    viewModel.resetAuthState()
                 }
             } catch (e: ApiException) {
-                // Handle Google Sign-In error
+                Timber.e(e, "Google Sign-In failed")
+                // Reset loading state and show error
+                viewModel.resetAuthState()
             }
         }
     )
@@ -432,18 +441,49 @@ fun RegisterScreen(navController: NavController, viewModel: AuthViewModel = hilt
 
                 // Google Sign-In Button
                 Spacer(modifier = Modifier.height(16.dp))
-                OutlinedButton(
+                Button(
                     onClick = {
                         googleSignInLauncher.launch(googleSignInClient.signInIntent)
                     },
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(48.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color.White,
                         contentColor = Color.Black
+                    ),
+                    border = BorderStroke(
+                        width = 1.dp,
+                        color = Color.LightGray
+                    ),
+                    elevation = ButtonDefaults.buttonElevation(
+                        defaultElevation = 2.dp,
+                        pressedElevation = 4.dp
                     )
                 ) {
-                    Text("Continue with Google")
+                    Text(
+                        "Continue with Google",
+                        style = MaterialTheme.typography.bodyLarge.copy(
+                            fontWeight = FontWeight.Medium
+                        )
+                    )
+                }
+
+                // Google Sign-In Error message
+                if (googleSignInState is Resource.Error<*>) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    val googleError = (googleSignInState as Resource.Error<*>).error
+                    val googleErrorMessage = when (googleError) {
+                        is com.example.diabite.util.AppError.NetworkError -> "Network error. Please check your connection"
+                        else -> googleError?.userMessage ?: "Google sign-in failed. Please try again"
+                    }
+                    Text(
+                        text = googleErrorMessage,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth()
+                    )
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))

@@ -2,6 +2,7 @@ package com.example.diabite.presentation.screen
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -66,6 +67,7 @@ import com.example.diabite.util.Resource
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.android.gms.common.api.ApiException
+import timber.log.Timber
 
 @Composable
 fun LoginScreen(navController: NavController, viewModel: AuthViewModel = hiltViewModel()) {
@@ -90,11 +92,16 @@ fun LoginScreen(navController: NavController, viewModel: AuthViewModel = hiltVie
             val task = GoogleSignIn.getSignedInAccountFromIntent(it.data)
             try {
                 val account = task.getResult(ApiException::class.java)
-                if (account != null) {
+                if (account != null && account.idToken != null) {
                     viewModel.googleSignIn(account.idToken!!)
+                } else {
+                    // Reset loading state and show error
+                    viewModel.resetAuthState()
                 }
             } catch (e: ApiException) {
-                // Handle Google Sign-In error
+                Timber.e(e, "Google Sign-In failed")
+                // Reset loading state and show error
+                viewModel.resetAuthState()
             }
         }
     )
@@ -268,19 +275,49 @@ fun LoginScreen(navController: NavController, viewModel: AuthViewModel = hiltVie
 
                 // Google Sign-In Button
                 Spacer(modifier = Modifier.height(16.dp))
-                OutlinedButton(
+                Button(
                     onClick = {
                         googleSignInLauncher.launch(googleSignInClient.signInIntent)
                     },
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(48.dp),
-                    enabled = loginState !is Resource.Loading<*>,
-                    colors = ButtonDefaults.outlinedButtonColors(
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color.White,
                         contentColor = Color.Black
+                    ),
+                    border = BorderStroke(
+                        width = 1.dp,
+                        color = Color.LightGray
+                    ),
+                    elevation = ButtonDefaults.buttonElevation(
+                        defaultElevation = 2.dp,
+                        pressedElevation = 4.dp
                     )
                 ) {
-                    Text("Continue with Google")
+                    Text(
+                        "Continue with Google",
+                        style = MaterialTheme.typography.bodyLarge.copy(
+                            fontWeight = FontWeight.Medium
+                        )
+                    )
+                }
+
+                // Google Sign-In Error message
+                if (googleSignInState is Resource.Error<*>) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    val googleError = (googleSignInState as Resource.Error<*>).error
+                    val googleErrorMessage = when (googleError) {
+                        is AppError.NetworkError -> "Network error. Please check your connection"
+                        else -> googleError?.userMessage ?: "Google sign-in failed. Please try again"
+                    }
+                    Text(
+                        text = googleErrorMessage,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth()
+                    )
                 }
 
                 // Error message

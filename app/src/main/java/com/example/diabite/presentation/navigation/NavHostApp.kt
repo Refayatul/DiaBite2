@@ -9,6 +9,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -31,6 +35,7 @@ import com.example.diabite.presentation.screen.SettingsScreen
 import com.example.diabite.presentation.screen.TypeInfoUI
 import com.example.diabite.presentation.viewmodel.AuthViewModel
 import com.example.diabite.util.Resource
+import kotlinx.coroutines.delay
 
 /**
  * The main entry point for the application's navigation.
@@ -42,15 +47,24 @@ fun NavHostApp(authViewModel: AuthViewModel = hiltViewModel()) {
     val authState by authViewModel.authState.collectAsState()
     val currentUser by authViewModel.currentUser.collectAsState()
 
+    // Timeout mechanism for auth checking
+    var showLoading by remember { mutableStateOf(true) }
+
+    LaunchedEffect(Unit) {
+        delay(3000) // 3 second timeout
+        showLoading = false
+    }
+
     // Determine start destination based on auth state
     val startDestination = when {
         authState is Resource.Success && authState.data != null -> Route.Home
         authState is Resource.Success && authState.data == null -> Route.Login
-        else -> Route.Login // Default to login while checking
+        authState is Resource.Loading && showLoading -> Route.Login // Don't wait indefinitely
+        else -> Route.Login // Default to login
     }
 
-    // Show loading screen while checking authentication
-    if (authState is Resource.Loading) {
+    // Show loading screen only briefly while checking authentication
+    if (authState is Resource.Loading && showLoading) {
         Box(
             modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.Center
