@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -65,9 +66,11 @@ import com.example.diabite.presentation.viewmodel.AuthViewModel
 import com.example.diabite.util.AppError
 import com.example.diabite.util.Resource
 import com.google.android.gms.auth.api.signin.GoogleSignIn
+import com.google.android.gms.auth.api.signin.GoogleSignInClient
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.android.gms.common.api.ApiException
 import timber.log.Timber
+import javax.inject.Inject
 
 @Composable
 fun LoginScreen(navController: NavController, viewModel: AuthViewModel = hiltViewModel()) {
@@ -85,6 +88,7 @@ fun LoginScreen(navController: NavController, viewModel: AuthViewModel = hiltVie
     val loginState by viewModel.loginState.collectAsState()
 
     val googleSignInState by viewModel.googleSignInState.collectAsState()
+    var isGoogleSignInLoading by remember { mutableStateOf(false) }
 
     val googleSignInLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult(),
@@ -134,12 +138,16 @@ fun LoginScreen(navController: NavController, viewModel: AuthViewModel = hiltVie
     LaunchedEffect(googleSignInState) {
         when (googleSignInState) {
             is Resource.Success<*> -> {
+                isGoogleSignInLoading = false
                 navController.navigate(Route.Home) {
                     popUpTo(Route.Login) { inclusive = true }
                 }
             }
             is Resource.Error<*> -> {
+                isGoogleSignInLoading = false
                 // Error is handled in the UI below
+                // Reset the state after showing error
+                viewModel.resetAuthState()
             }
             else -> {}
         }
@@ -277,6 +285,7 @@ fun LoginScreen(navController: NavController, viewModel: AuthViewModel = hiltVie
                 Spacer(modifier = Modifier.height(16.dp))
                 Button(
                     onClick = {
+                        isGoogleSignInLoading = true
                         googleSignInLauncher.launch(googleSignInClient.signInIntent)
                     },
                     modifier = Modifier
@@ -293,14 +302,29 @@ fun LoginScreen(navController: NavController, viewModel: AuthViewModel = hiltVie
                     elevation = ButtonDefaults.buttonElevation(
                         defaultElevation = 2.dp,
                         pressedElevation = 4.dp
-                    )
+                    ),
+                    enabled = !isGoogleSignInLoading
                 ) {
-                    Text(
-                        "Continue with Google",
-                        style = MaterialTheme.typography.bodyLarge.copy(
-                            fontWeight = FontWeight.Medium
+                    if (isGoogleSignInLoading) {
+                        androidx.compose.material3.CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            color = Color.Black
                         )
-                    )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            "Signing in...",
+                            style = MaterialTheme.typography.bodyLarge.copy(
+                                fontWeight = FontWeight.Medium
+                            )
+                        )
+                    } else {
+                        Text(
+                            "Continue with Google",
+                            style = MaterialTheme.typography.bodyLarge.copy(
+                                fontWeight = FontWeight.Medium
+                            )
+                        )
+                    }
                 }
 
                 // Google Sign-In Error message

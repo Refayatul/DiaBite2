@@ -74,6 +74,24 @@ fun NavHostApp(authViewModel: AuthViewModel = hiltViewModel()) {
         return
     }
 
+    // Handle navigation when auth state changes (e.g., after logout)
+    LaunchedEffect(authState) {
+        when {
+            authState is Resource.Success && authState.data == null -> {
+                // User is logged out, navigate to login
+                navController.navigate(Route.Login) {
+                    popUpTo(0) { inclusive = true } // Clear entire back stack
+                }
+            }
+            authState is Resource.Success && authState.data != null -> {
+                // User is logged in, navigate to home
+                navController.navigate(Route.Home) {
+                    popUpTo(Route.Login) { inclusive = true }
+                }
+            }
+        }
+    }
+
     NavHost(
         navController = navController,
         startDestination = startDestination,

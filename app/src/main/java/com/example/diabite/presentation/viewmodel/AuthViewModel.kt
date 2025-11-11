@@ -299,11 +299,12 @@ class AuthViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 authRepository.logout().collect { resource ->
-                    when (resource) {
-                        is Resource.Success -> {
-                            _currentUser.value = null
-                            _logoutState.value = Resource.success(Unit)
-                        }
+                when (resource) {
+                    is Resource.Success -> {
+                        _currentUser.value = null
+                        _authState.value = Resource.success(null) // Update auth state for navigation
+                        _logoutState.value = Resource.success(Unit)
+                    }
                         is Resource.Error -> {
                             Timber.e(resource.error?.cause, "Logout failed")
                             _logoutState.value = resource

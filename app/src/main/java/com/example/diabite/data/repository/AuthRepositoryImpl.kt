@@ -4,6 +4,7 @@ import com.example.diabite.data.model.User
 import com.example.diabite.domain.repository.AuthRepository
 import com.example.diabite.util.AppError
 import com.example.diabite.util.Resource
+import com.google.android.gms.auth.api.signin.GoogleSignInClient
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.flow.Flow
@@ -16,7 +17,8 @@ import javax.inject.Singleton
 @Singleton
 class AuthRepositoryImpl @Inject constructor(
     private val firebaseAuth: FirebaseAuth,
-    private val firestore: FirebaseFirestore
+    private val firestore: FirebaseFirestore,
+    private val googleSignInClient: GoogleSignInClient
 ) : AuthRepository {
 
     override fun signUp(email: String, password: String, user: User): Flow<Resource<User>> = flow {
@@ -120,7 +122,10 @@ class AuthRepositoryImpl @Inject constructor(
         emit(Resource.loading())
 
         try {
+            // Sign out from Firebase Auth
             firebaseAuth.signOut()
+            // Sign out from Google Sign-In to force account selection on next login
+            googleSignInClient.signOut().await()
             emit(Resource.success(Unit))
         } catch (e: Exception) {
             Timber.e(e, "Logout failed")
