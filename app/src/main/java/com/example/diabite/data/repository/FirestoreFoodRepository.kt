@@ -3,6 +3,12 @@ package com.example.diabite.data.repository
 import com.example.diabite.data.model.Alternative
 import com.example.diabite.data.model.ConditionRecommendation
 import com.example.diabite.data.model.FoodItem
+import com.example.diabite.data.model.FoodLink
+import com.example.diabite.data.model.NutritionalBenefit
+import com.example.diabite.data.model.PotentialConcern
+import com.example.diabite.data.model.PreparationTip
+import com.example.diabite.data.model.Serving
+import com.example.diabite.data.model.Timing
 import com.example.diabite.domain.repository.FoodRepository
 import com.example.diabite.util.AppError
 import com.example.diabite.util.Resource
@@ -28,7 +34,7 @@ class FirestoreFoodRepository @Inject constructor(
     private val maxRetries = 3
     private val baseDelayMs = 1000L
 
-    override fun searchFood(query: String): Flow<Resource<List<FoodItem>>> = flow {
+    override fun searchFood(query: String, userConditions: List<String>): Flow<Resource<List<FoodItem>>> = flow {
         emit(Resource.loading())
 
         try {
@@ -49,7 +55,7 @@ class FirestoreFoodRepository @Inject constructor(
                     .get()
                     .await()
 
-                val foods = querySnapshot.documents.mapNotNull { document ->
+                var foods = querySnapshot.documents.mapNotNull { document ->
                     try {
                         document.toFoodItem()
                     } catch (e: Exception) {
@@ -66,7 +72,7 @@ class FirestoreFoodRepository @Inject constructor(
                         .get()
                         .await()
 
-                    containsQuerySnapshot.documents.mapNotNull { document ->
+                    foods = containsQuerySnapshot.documents.mapNotNull { document ->
                         try {
                             document.toFoodItem()
                         } catch (e: Exception) {
@@ -74,9 +80,21 @@ class FirestoreFoodRepository @Inject constructor(
                             null
                         }
                     }
-                } else {
-                    foods
                 }
+
+                // If user conditions are provided, filter the results
+                if (userConditions.isNotEmpty()) {
+                    foods = foods.filter { food ->
+                        userConditions.any { condition ->
+                            val recommendation = food.recommendations[condition]
+                            recommendation?.status?.let { status ->
+                                status.contains("good", ignoreCase = true) ||
+                                status.contains("moderate", ignoreCase = true)
+                            } ?: false
+                        }
+                    }
+                }
+                foods
             }
 
             emit(Resource.success(result))
@@ -251,10 +269,9 @@ class FirestoreFoodRepository @Inject constructor(
                 val recommendedFoods = allFoods.filter { food ->
                     userConditions.any { condition ->
                         val recommendation = food.recommendations[condition]
-                        recommendation?.safetyLevel?.let { safety ->
-                            safety.contains("Safe", ignoreCase = true) ||
-                            safety.contains("Good", ignoreCase = true) ||
-                            safety.contains("Recommended", ignoreCase = true)
+                        recommendation?.status?.let { status ->
+                            status.contains("good", ignoreCase = true) ||
+                            status.contains("moderate", ignoreCase = true)
                         } ?: false
                     }
                 }
@@ -345,47 +362,90 @@ class FirestoreFoodRepository @Inject constructor(
 /**
  * Extension function to convert Firestore document to FoodItem
  */
-private fun com.google.firebase.firestore.DocumentSnapshot.toFoodItem(): FoodItem {
-    return FoodItem(
-        id = getString("id") ?: id,
-        name = getString("name") ?: "",
-        normalizedName = getString("normalizedName") ?: "",
-        category = getString("category") ?: "",
-        calories = getLong("calories")?.toInt() ?: 0,
-        carbs = getDouble("carbs") ?: 0.0,
-        fiber = getDouble("fiber") ?: 0.0,
-        sugars = getDouble("sugars") ?: 0.0,
-        protein = getDouble("protein") ?: 0.0,
-        totalFat = getDouble("totalFat") ?: 0.0,
-        saturatedFat = getDouble("saturatedFat") ?: 0.0,
-        sodium = getDouble("sodium") ?: 0.0,
-        potassium = getDouble("potassium") ?: 0.0,
-        glycemicIndex = getLong("glycemicIndex")?.toInt(),
-        glycemicLoad = getDouble("glycemicLoad"),
-        recommendations = (get("recommendations") as? Map<String, Map<String, Any>>)?.mapValues { (_, recMap) ->
-            ConditionRecommendation(
-                safetyLevel = recMap["safetyLevel"] as? String ?: "",
-                reasoning = recMap["reasoning"] as? String ?: "",
-                keyPoints = (recMap["keyPoints"] as? List<String>) ?: emptyList(),
-                servingAdvice = recMap["servingAdvice"] as? String ?: "",
-                timingAdvice = recMap["timingAdvice"] as? String,
-                pairingSuggestions = (recMap["pairingSuggestions"] as? List<String>) ?: emptyList(),
-                alternatives = (recMap["alternatives"] as? List<String>) ?: emptyList(),
-                bloodSugarImpact = recMap["bloodSugarImpact"] as? String,
-                bloodPressureImpact = recMap["bloodPressureImpact"] as? String,
-                heartHealthImpact = recMap["heartHealthImpact"] as? String
-            )
-        } ?: emptyMap(),
-        primaryAlternatives = (get("primaryAlternatives") as? List<Map<String, Any>>)?.map { altMap ->
-            Alternative(
-                foodId = altMap["foodId"] as? String ?: "",
-                advantage = altMap["advantage"] as? String ?: "",
-                improvement = altMap["improvement"] as? String ?: "",
-                bestFor = (altMap["bestFor"] as? List<String>) ?: emptyList()
-            )
-        } ?: emptyList(),
-        alternativeReasoning = getString("alternativeReasoning") ?: "",
-        glycemicImpact = getString("glycemicImpact") ?: "",
-        nutritionalDensity = getString("nutritionalDensity") ?: ""
-    )
+private fun com.google.firebase.firestore.DocumentSnapshot.toFoodItem(): FoodItem? {
+    return try {
+        FoodItem(
+            id = getString("id") ?: id,
+            name = getString("name") ?: "",
+            normalizedName = getString("normalizedName") ?: "",
+            category = getString("category") ?: "",
+            calories = getLong("calories")?.toInt() ?: 0,
+            carbs = getDouble("totalCarbohydrates") ?: 0.0,
+            fiber = getDouble("fiber") ?: 0.0,
+            sugars = getDouble("sugars") ?: 0.0,
+            protein = getDouble("protein") ?: 0.0,
+            totalFat = getDouble("totalFat") ?: 0.0,
+            saturatedFat = getDouble("saturatedFat") ?: 0.0,
+            sodium = getDouble("sodium") ?: 0.0,
+            potassium = getDouble("potassium") ?: 0.0,
+            glycemicIndex = getLong("glycemicIndex")?.toInt(),
+            glycemicLoad = getDouble("glycemicLoad"),
+            recommendations = (get("recommendations") as? Map<String, Any>)?.mapValues { (_, value) ->
+                val recMap = value as? Map<String, Any> ?: emptyMap()
+                if (recMap.containsKey("status")) {
+                    // New structure
+                    ConditionRecommendation(
+                        status = recMap["status"] as? String ?: "",
+                        reasoning = recMap["reasoning"] as? String ?: "",
+                        serving = (recMap["serving"] as? Map<String, Any>)?.let { servingMap ->
+                            Serving(
+                                standard = servingMap["standard"] as? String ?: "",
+                                adjusted = servingMap["adjusted"] as? String
+                            )
+                        },
+                        timing = (recMap["timing"] as? Map<String, Any>)?.let { timingMap ->
+                            Timing(
+                                bestTime = timingMap["bestTime"] as? String,
+                                avoidWhen = timingMap["avoidWhen"] as? String
+                            )
+                        },
+                        pairing = (recMap["pairing"] as? List<Map<String, Any>>)?.mapNotNull { linkMap ->
+                            FoodLink(
+                                foodId = linkMap["foodId"] as? String ?: "",
+                                reason = linkMap["reason"] as? String ?: ""
+                            )
+                        } ?: emptyList(),
+                        alternatives = (recMap["alternatives"] as? List<Map<String, Any>>)?.mapNotNull { linkMap ->
+                            FoodLink(
+                                foodId = linkMap["foodId"] as? String ?: "",
+                                reason = linkMap["reason"] as? String ?: ""
+                            )
+                        } ?: emptyList(),
+                        warnings = (recMap["warnings"] as? List<String>) ?: emptyList()
+                    )
+                } else {
+                    // Old structure - adapt to new model
+                    ConditionRecommendation(
+                        status = recMap["safetyLevel"] as? String ?: "",
+                        reasoning = recMap["reasoning"] as? String ?: "",
+                        serving = Serving(
+                            standard = recMap["servingAdvice"] as? String ?: "",
+                            adjusted = null
+                        ),
+                        timing = Timing(
+                            bestTime = recMap["timingAdvice"] as? String,
+                            avoidWhen = null
+                        ),
+                        pairing = (recMap["pairingSuggestions"] as? List<String>)?.map { FoodLink(foodId = it) } ?: emptyList(),
+                        alternatives = (recMap["alternatives"] as? List<String>)?.map { FoodLink(foodId = it) } ?: emptyList(),
+                        warnings = (recMap["keyPoints"] as? List<String>) ?: emptyList()
+                    )
+                }
+            } ?: emptyMap(),
+            primaryAlternatives = (get("primaryAlternatives") as? List<Map<String, Any>>)?.mapNotNull { altMap ->
+                Alternative(
+                    foodId = altMap["foodId"] as? String ?: "",
+                    advantage = altMap["advantage"] as? String ?: "",
+                    improvement = altMap["improvement"] as? String ?: "",
+                    bestFor = (altMap["bestFor"] as? List<String>) ?: emptyList()
+                )
+            } ?: emptyList(),
+            alternativeReasoning = getString("alternativeReasoning") ?: "",
+            glycemicImpact = getString("glycemicImpact") ?: "",
+            nutritionalDensity = getString("nutritionalDensity") ?: ""
+        )
+    } catch (e: Exception) {
+        Timber.e(e, "Failed to parse FoodItem document: $id")
+        null
+    }
 }

@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.diabite.data.local.CacheManager
 import com.example.diabite.data.model.CachedSearch
 import com.example.diabite.data.model.FoodItem
+import com.example.diabite.domain.repository.AuthRepository
 import com.example.diabite.domain.repository.FoodRepository
 import com.example.diabite.util.FoodNormalizer
 import com.example.diabite.util.Resource
@@ -16,6 +17,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
@@ -24,6 +26,7 @@ import javax.inject.Inject
 @HiltViewModel
 class SearchViewModel @Inject constructor(
     private val foodRepository: FoodRepository,
+    private val authRepository: AuthRepository,
     private val cacheManager: CacheManager,
     private val foodNormalizer: FoodNormalizer
 ) : ViewModel() {
@@ -39,6 +42,10 @@ class SearchViewModel @Inject constructor(
     // Search history state
     private val _searchHistory = MutableStateFlow<List<CachedSearch>>(emptyList())
     val searchHistory: StateFlow<List<CachedSearch>> = _searchHistory.asStateFlow()
+
+    // User conditions state
+    private val _userConditions = MutableStateFlow<List<String>>(emptyList())
+    val userConditions: StateFlow<List<String>> = _userConditions.asStateFlow()
 
     // UI states
     private val _isLoading = MutableStateFlow(false)
@@ -61,7 +68,22 @@ class SearchViewModel @Inject constructor(
 
     init {
         loadSearchHistory()
+        loadUserConditions()
         setupSearchFlow()
+    }
+
+    /**
+     * Load user conditions from auth repository
+     */
+    private fun loadUserConditions() {
+        viewModelScope.launch {
+            try {
+                val user = authRepository.getCurrentUser().first()
+                _userConditions.value = user?.primaryConditions ?: emptyList()
+            } catch (e: Exception) {
+                _error.value = "Failed to load user profile"
+            }
+        }
     }
 
     /**
@@ -89,7 +111,7 @@ class SearchViewModel @Inject constructor(
                 .filter { it.isNotBlank() && it.length >= 2 } // Minimum 2 characters
                 .distinctUntilChanged()
                 .collect { query ->
-                    performSearch(query).collect { resource ->
+                    performSearch(query, _userConditions.value).collect { resource ->
                         when (resource) {
                             is Resource.Success -> {
                                 val foods = resource.data ?: emptyList()
@@ -117,15 +139,15 @@ class SearchViewModel @Inject constructor(
     /**
      * Perform the actual search
      */
-    private fun performSearch(query: String) = kotlinx.coroutines.flow.flow<Resource<List<FoodItem>>> { 
+    private fun performSearch(query: String, userConditions: List<String>) = kotlinx.coroutines.flow.flow<Resource<List<FoodItem>>> { 
         try {
             emit(Resource.Loading<List<FoodItem>>()) 
 
             // Save search to history
             saveSearchToHistory(query)
 
-            // Perform search
-            foodRepository.searchFood(query).collect { result ->
+            // Perform search with user conditions
+            foodRepository.searchFood(query, userConditions).collect { result ->
                 emit(result)
             }
 

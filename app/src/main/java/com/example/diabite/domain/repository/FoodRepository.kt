@@ -8,9 +8,10 @@ interface FoodRepository {
     /**
      * Search for food items by query string
      * @param query The search query (food name)
+     * @param userConditions List of user's medical conditions for personalized results
      * @return Flow of Resource containing list of matching FoodItems
      */
-    fun searchFood(query: String): Flow<Resource<List<FoodItem>>>
+    fun searchFood(query: String, userConditions: List<String> = emptyList()): Flow<Resource<List<FoodItem>>>
 
     /**
      * Get a specific food item by its ID

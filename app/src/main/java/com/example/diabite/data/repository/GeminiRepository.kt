@@ -1,15 +1,20 @@
 package com.example.diabite.data.repository
 
+import com.example.diabite.data.model.Alternative
+import com.example.diabite.data.model.ConditionRecommendation
 import com.example.diabite.data.model.FoodItem
+import com.example.diabite.data.model.FoodLink
+import com.example.diabite.data.model.NutritionalBenefit
+import com.example.diabite.data.model.PotentialConcern
+import com.example.diabite.data.model.PreparationTip
+import com.example.diabite.data.model.Serving
+import com.example.diabite.data.model.Timing
 import com.example.diabite.util.AppError
 import com.example.diabite.util.Resource
 import com.google.firebase.functions.FirebaseFunctions
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
-import kotlinx.coroutines.suspendCancellableCoroutine
-import kotlin.coroutines.resume
-import kotlin.coroutines.resumeWithException
 
 class GeminiRepository(
     private val functions: FirebaseFunctions = FirebaseFunctions.getInstance()
@@ -18,11 +23,12 @@ class GeminiRepository(
     /**
      * Analyze food using Gemini AI Cloud Function
      */
-    fun analyzeFood(foodName: String): Flow<Resource<FoodItem>> = callbackFlow {
+    fun analyzeFood(foodName: String, userConditions: List<String>): Flow<Resource<FoodItem>> = callbackFlow {
         trySend(Resource.loading())
 
         val data = hashMapOf(
-            "foodName" to foodName.trim()
+            "foodName" to foodName.trim(),
+            "userConditions" to userConditions
         )
 
         val task = functions
@@ -73,7 +79,7 @@ class GeminiRepository(
                 normalizedName = data["normalizedName"] as? String ?: "",
                 category = data["category"] as? String ?: "Unknown",
                 calories = (data["calories"] as? Number)?.toInt() ?: 0,
-                carbs = (data["carbs"] as? Number)?.toDouble() ?: 0.0,
+                carbs = (data["totalCarbohydrates"] as? Number)?.toDouble() ?: 0.0,
                 fiber = (data["fiber"] as? Number)?.toDouble() ?: 0.0,
                 sugars = (data["sugars"] as? Number)?.toDouble() ?: 0.0,
                 protein = (data["protein"] as? Number)?.toDouble() ?: 0.0,
@@ -87,7 +93,15 @@ class GeminiRepository(
                 primaryAlternatives = parseAlternatives(data["primaryAlternatives"] as? List<*>),
                 alternativeReasoning = data["alternativeReasoning"] as? String ?: "",
                 glycemicImpact = data["glycemicImpact"] as? String ?: "Unknown",
-                nutritionalDensity = data["nutritionalDensity"] as? String ?: "Medium"
+                nutritionalDensity = data["nutritionalDensity"] as? String ?: "Medium",
+                householdMeasure = data["householdMeasure"] as? String,
+                netCarbs = (data["netCarbs"] as? Number)?.toDouble(),
+                nutritionalBenefits = parseNutritionalBenefits(data["nutritionalBenefits"] as? List<*>),
+                potentialConcerns = parsePotentialConcerns(data["potentialConcerns"] as? List<*>),
+                preparationTips = parsePreparationTips(data["preparationTips"] as? List<*>),
+                inflammatoryIndex = data["inflammatoryIndex"] as? String,
+                dataSource = data["dataSource"] as? String,
+                confidenceScore = (data["confidenceScore"] as? Number)?.toDouble()
             )
         } catch (e: Exception) {
             null
@@ -108,26 +122,83 @@ class GeminiRepository(
      * Parse single condition recommendation
      */
     private fun parseConditionRecommendation(data: Map<*, *>) =
-        com.example.diabite.data.model.ConditionRecommendation(
-            safetyLevel = data["safetyLevel"] as? String ?: "Unknown",
+        ConditionRecommendation(
+            status = data["status"] as? String ?: "",
             reasoning = data["reasoning"] as? String ?: "",
-            keyPoints = (data["keyPoints"] as? List<*>)?.filterIsInstance<String>() ?: emptyList(),
-            servingAdvice = data["servingAdvice"] as? String ?: "",
-            timingAdvice = data["timingAdvice"] as? String,
-            pairingSuggestions = (data["pairingSuggestions"] as? List<*>)?.filterIsInstance<String>() ?: emptyList(),
-            alternatives = (data["alternatives"] as? List<*>)?.filterIsInstance<String>() ?: emptyList(),
-            bloodSugarImpact = data["bloodSugarImpact"] as? String,
-            bloodPressureImpact = data["bloodPressureImpact"] as? String,
-            heartHealthImpact = data["heartHealthImpact"] as? String
+            serving = (data["serving"] as? Map<*, *>)?.let { parseServing(it) },
+            timing = (data["timing"] as? Map<*, *>)?.let { parseTiming(it) },
+            pairing = (data["pairing"] as? List<*>)?.let { parseFoodLinkList(it) } ?: emptyList(),
+            alternatives = (data["alternatives"] as? List<*>)?.let { parseFoodLinkList(it) } ?: emptyList(),
+            warnings = (data["warnings"] as? List<*>)?.filterIsInstance<String>() ?: emptyList()
         )
+
+    private fun parseServing(data: Map<*, *>): Serving {
+        return Serving(
+            standard = data["standard"] as? String ?: "",
+            adjusted = data["adjusted"] as? String
+        )
+    }
+
+    private fun parseTiming(data: Map<*, *>): Timing {
+        return Timing(
+            bestTime = data["bestTime"] as? String,
+            avoidWhen = data["avoidWhen"] as? String
+        )
+    }
+
+    private fun parseFoodLinkList(data: List<*>): List<FoodLink> {
+        return data.mapNotNull { item ->
+            if (item is Map<*, *>) {
+                FoodLink(
+                    foodId = item["foodId"] as? String ?: "",
+                    reason = item["reason"] as? String ?: ""
+                )
+            } else null
+        }
+    }
+
+    private fun parseNutritionalBenefits(benefits: List<*>?): List<NutritionalBenefit> {
+        return benefits?.mapNotNull { item ->
+            if (item is Map<*, *>) {
+                NutritionalBenefit(
+                    category = item["category"] as? String ?: "",
+                    description = item["description"] as? String ?: "",
+                    strength = item["strength"] as? String ?: ""
+                )
+            } else null
+        } ?: emptyList()
+    }
+
+    private fun parsePotentialConcerns(concerns: List<*>?): List<PotentialConcern> {
+        return concerns?.mapNotNull { item ->
+            if (item is Map<*, *>) {
+                PotentialConcern(
+                    category = item["category"] as? String ?: "",
+                    description = item["description"] as? String ?: "",
+                    severity = item["severity"] as? String ?: ""
+                )
+            } else null
+        } ?: emptyList()
+    }
+
+    private fun parsePreparationTips(tips: List<*>?): List<PreparationTip> {
+        return tips?.mapNotNull { item ->
+            if (item is Map<*, *>) {
+                PreparationTip(
+                    category = item["category"] as? String ?: "",
+                    description = item["description"] as? String ?: ""
+                )
+            } else null
+        } ?: emptyList()
+    }
 
     /**
      * Parse alternatives from response
      */
-    private fun parseAlternatives(alternatives: List<*>?) =
-        alternatives?.mapNotNull { item ->
+    private fun parseAlternatives(alternatives: List<*>?): List<Alternative> {
+        return alternatives?.mapNotNull { item ->
             if (item is Map<*, *>) {
-                com.example.diabite.data.model.Alternative(
+                Alternative(
                     foodId = item["foodId"] as? String ?: "",
                     advantage = item["advantage"] as? String ?: "",
                     improvement = item["improvement"] as? String ?: "",
@@ -135,6 +206,7 @@ class GeminiRepository(
                 )
             } else null
         } ?: emptyList()
+    }
 
     /**
      * Handle Gemini-specific errors

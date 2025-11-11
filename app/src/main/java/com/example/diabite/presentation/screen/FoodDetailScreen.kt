@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -42,8 +41,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -65,7 +62,7 @@ fun FoodDetailScreen(
     val expandedSections by viewModel.expandedSections.collectAsState()
 
     // Mock user conditions - in real app this would come from user profile
-    val userConditions = listOf("diabetes", "hypertension")
+    val userConditions = listOf("diabetes_type2", "hypertension")
 
     Scaffold(
         topBar = {
@@ -109,7 +106,7 @@ fun FoodDetailScreen(
                         onSectionToggle = { viewModel.toggleSection(it) },
                         onAlternativeClick = { alternative ->
                             // Navigate to alternative food detail
-                            navController.navigate(com.example.diabite.common.Route.FoodDetail(alternative.id))
+                            navController.navigate("foodDetail/${alternative.id}")
                         }
                     )
                 }
@@ -217,15 +214,6 @@ private fun FoodDetailContent(
         }
 
         ExpandableSection(
-            title = "👨‍🍳 Preparation Tips",
-            sectionKey = "preparation",
-            isExpanded = expandedSections.contains("preparation"),
-            onToggle = onSectionToggle
-        ) {
-            PreparationTipsSection(foodItem = foodItem)
-        }
-
-        ExpandableSection(
             title = "🔄 Smart Alternatives",
             sectionKey = "alternatives",
             isExpanded = expandedSections.contains("alternatives"),
@@ -236,18 +224,6 @@ private fun FoodDetailContent(
                 alternatives = alternatives,
                 userConditions = userConditions,
                 onAlternativeClick = onAlternativeClick
-            )
-        }
-
-        ExpandableSection(
-            title = "💡 Quick Swap Guide",
-            sectionKey = "swap_guide",
-            isExpanded = expandedSections.contains("swap_guide"),
-            onToggle = onSectionToggle
-        ) {
-            QuickSwapGuideSection(
-                foodItem = foodItem,
-                alternatives = alternatives.take(3)
             )
         }
 
@@ -462,43 +438,6 @@ private fun ConditionAdviceSection(
 }
 
 @Composable
-private fun PreparationTipsSection(foodItem: FoodItem) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp)
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                text = "Cooking & Preparation Tips",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Mock preparation tips - in real app this would come from data
-            val tips = listOf(
-                "🍳 Cook with healthy oils like olive oil instead of butter",
-                "⏰ Avoid overcooking to preserve nutrients",
-                "🥗 Pair with vegetables for better nutrient absorption",
-                "🧂 Use herbs and spices instead of excess salt",
-                "❄️ Store properly to maintain freshness"
-            )
-
-            tips.forEach { tip ->
-                Text(
-                    text = tip,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.padding(vertical = 4.dp)
-                )
-            }
-        }
-    }
-}
-
-@Composable
 private fun AlternativesComparisonSection(
     originalFood: FoodItem,
     alternatives: List<FoodItem>,
@@ -580,48 +519,6 @@ private fun AlternativesComparisonSection(
     }
 }
 
-@Composable
-private fun QuickSwapGuideSection(
-    foodItem: FoodItem,
-    alternatives: List<FoodItem>
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp)
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                text = "Easy Swap Suggestions",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            alternatives.forEachIndexed { index, alternative ->
-                QuickSwapItem(
-                    number = index + 1,
-                    originalFood = foodItem.name,
-                    alternativeFood = alternative.name,
-                    reason = "Better glycemic control and nutrient profile"
-                )
-                if (index < alternatives.size - 1) {
-                    Spacer(modifier = Modifier.height(12.dp))
-                }
-            }
-
-            if (alternatives.isEmpty()) {
-                Text(
-                    text = "No alternative suggestions available.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-    }
-}
-
 // Helper composables
 @Composable
 private fun NutritionalHighlight(label: String, value: String) {
@@ -642,10 +539,10 @@ private fun NutritionalHighlight(label: String, value: String) {
 
 @Composable
 private fun SafetyRatingDisplay(safetyRating: String) {
-    val (backgroundColor, textColor) = when (safetyRating) {
-        "Avoid" -> MaterialTheme.colorScheme.error to MaterialTheme.colorScheme.onError
-        "Caution" -> MaterialTheme.colorScheme.tertiary to MaterialTheme.colorScheme.onTertiary
-        "Safe", "Good", "Recommended" -> MaterialTheme.colorScheme.primary to MaterialTheme.colorScheme.onPrimary
+    val (backgroundColor, textColor) = when (safetyRating.lowercase()) {
+        "avoid" -> MaterialTheme.colorScheme.error to MaterialTheme.colorScheme.onError
+        "caution", "moderate" -> MaterialTheme.colorScheme.tertiary to MaterialTheme.colorScheme.onTertiary
+        "good" -> MaterialTheme.colorScheme.primary to MaterialTheme.colorScheme.onPrimary
         else -> MaterialTheme.colorScheme.surfaceVariant to MaterialTheme.colorScheme.onSurfaceVariant
     }
 
@@ -695,11 +592,9 @@ private fun ConditionAdviceCard(
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = when {
-                recommendation.safetyLevel.contains("Avoid", ignoreCase = true) ->
-                    MaterialTheme.colorScheme.errorContainer
-                recommendation.safetyLevel.contains("Caution", ignoreCase = true) ->
-                    MaterialTheme.colorScheme.tertiaryContainer
+            containerColor = when (recommendation.status.lowercase()) {
+                "avoid" -> MaterialTheme.colorScheme.errorContainer
+                "caution", "moderate" -> MaterialTheme.colorScheme.tertiaryContainer
                 else -> MaterialTheme.colorScheme.primaryContainer
             }
         ),
@@ -716,19 +611,32 @@ private fun ConditionAdviceCard(
             Spacer(modifier = Modifier.height(4.dp))
 
             Text(
-                text = recommendation.safetyLevel,
+                text = recommendation.status.replaceFirstChar { it.uppercase() },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.primary,
                 fontWeight = FontWeight.Medium
             )
 
-            if (recommendation.servingAdvice.isNotBlank()) {
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "💡 ${recommendation.servingAdvice}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
+            recommendation.serving?.standard?.let {
+                if (it.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "💡 ${it}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            }
+
+            recommendation.warnings.firstOrNull()?.let {
+                 if (it.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "⚠️ ${it}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
             }
         }
     }
@@ -776,49 +684,15 @@ private fun ComparisonRow(
             text = safetyRating,
             style = MaterialTheme.typography.bodySmall,
             textAlign = TextAlign.Center,
-            color = when (safetyRating) {
-                "Avoid" -> MaterialTheme.colorScheme.error
-                "Caution" -> MaterialTheme.colorScheme.tertiary
-                "Safe", "Good", "Recommended" -> MaterialTheme.colorScheme.primary
+            color = when (safetyRating.lowercase()) {
+                "avoid" -> MaterialTheme.colorScheme.error
+                "caution", "moderate" -> MaterialTheme.colorScheme.tertiary
+                "good" -> MaterialTheme.colorScheme.primary
                 else -> MaterialTheme.colorScheme.onSurfaceVariant
             },
             fontWeight = FontWeight.Medium,
             modifier = Modifier.weight(1f)
         )
-    }
-}
-
-@Composable
-private fun QuickSwapItem(
-    number: Int,
-    originalFood: String,
-    alternativeFood: String,
-    reason: String
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.Top
-    ) {
-        Text(
-            text = "$number.",
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(end = 8.dp)
-        )
-
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = "Replace \"$originalFood\" with \"$alternativeFood\"",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Text(
-                text = reason,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
     }
 }
 
@@ -832,14 +706,13 @@ private fun getSafetyRating(foodItem: FoodItem, userConditions: List<String>): S
 
     if (relevantRecommendations.isEmpty()) return "Unknown"
 
-    val safetyLevels = relevantRecommendations.map { it.safetyLevel }
+    val statuses = relevantRecommendations.map { it.status }
 
     return when {
-        safetyLevels.any { it.contains("Avoid", ignoreCase = true) } -> "Avoid"
-        safetyLevels.any { it.contains("Caution", ignoreCase = true) } -> "Caution"
-        safetyLevels.any { it.contains("Safe", ignoreCase = true) } -> "Safe"
-        safetyLevels.any { it.contains("Good", ignoreCase = true) } -> "Good"
-        safetyLevels.any { it.contains("Recommended", ignoreCase = true) } -> "Recommended"
+        statuses.any { it.equals("avoid", ignoreCase = true) } -> "Avoid"
+        statuses.any { it.equals("caution", ignoreCase = true) } -> "Caution"
+        statuses.any { it.equals("moderate", ignoreCase = true) } -> "Caution"
+        statuses.any { it.equals("good", ignoreCase = true) } -> "Good"
         else -> "Unknown"
     }
 }

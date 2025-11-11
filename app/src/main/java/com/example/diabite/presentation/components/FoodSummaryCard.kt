@@ -35,17 +35,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.example.diabite.data.model.FoodItem
 
 @Composable
 fun FoodSummaryCard(
     foodItem: FoodItem,
-    userConditions: List<String>,
-    onAlternativeClick: (FoodItem) -> Unit,
+    safetyRating: String,
+    primaryConcern: String?,
+    servingAdvice: String?,
+    onAlternativeClick: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var alternativesExpanded by remember { mutableStateOf(false) }
@@ -113,10 +113,6 @@ fun FoodSummaryCard(
             Spacer(modifier = Modifier.height(16.dp))
 
             // Safety rating and primary concern
-            val safetyRating = getSafetyRating(foodItem, userConditions)
-            val primaryConcern = getPrimaryConcern(foodItem, userConditions)
-            val servingAdvice = getServingAdvice(foodItem, userConditions)
-
             if (safetyRating != "Unknown" || primaryConcern != null) {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -124,7 +120,7 @@ fun FoodSummaryCard(
                         containerColor = when (safetyRating) {
                             "Avoid" -> MaterialTheme.colorScheme.errorContainer
                             "Caution" -> MaterialTheme.colorScheme.tertiaryContainer
-                            "Safe", "Good", "Recommended" -> MaterialTheme.colorScheme.primaryContainer
+                            "Good" -> MaterialTheme.colorScheme.primaryContainer
                             else -> MaterialTheme.colorScheme.surfaceVariant
                         }
                     ),
@@ -205,10 +201,7 @@ fun FoodSummaryCard(
                         foodItem.primaryAlternatives.forEach { alternative ->
                             AlternativeItem(
                                 alternative = alternative,
-                                onClick = {
-                                    // This would need to be handled by finding the actual FoodItem
-                                    // For now, we'll create a placeholder navigation
-                                }
+                                onClick = { onAlternativeClick(alternative.foodId) }
                             )
                         }
                     }
@@ -245,7 +238,7 @@ private fun SafetyBadge(safetyRating: String) {
     val (backgroundColor, textColor) = when (safetyRating) {
         "Avoid" -> MaterialTheme.colorScheme.error to MaterialTheme.colorScheme.onError
         "Caution" -> MaterialTheme.colorScheme.tertiary to MaterialTheme.colorScheme.onTertiary
-        "Safe", "Good", "Recommended" -> MaterialTheme.colorScheme.primary to MaterialTheme.colorScheme.onPrimary
+        "Good" -> MaterialTheme.colorScheme.primary to MaterialTheme.colorScheme.onPrimary
         else -> MaterialTheme.colorScheme.surfaceVariant to MaterialTheme.colorScheme.onSurfaceVariant
     }
 
@@ -300,7 +293,7 @@ private fun AlternativeItem(
             // Alternative details
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "Alternative Food", // Would be actual food name
+                    text = alternative.foodId.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() },
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface
@@ -327,55 +320,4 @@ private fun AlternativeItem(
             )
         }
     }
-}
-
-// Helper functions (would normally be in ViewModel)
-private fun getSafetyRating(foodItem: FoodItem, userConditions: List<String>): String {
-    if (userConditions.isEmpty()) return "Unknown"
-
-    val relevantRecommendations = userConditions.mapNotNull { condition ->
-        foodItem.recommendations[condition]
-    }
-
-    if (relevantRecommendations.isEmpty()) return "Unknown"
-
-    val safetyLevels = relevantRecommendations.map { it.safetyLevel }
-
-    return when {
-        safetyLevels.any { it.contains("Avoid", ignoreCase = true) } -> "Avoid"
-        safetyLevels.any { it.contains("Caution", ignoreCase = true) } -> "Caution"
-        safetyLevels.any { it.contains("Safe", ignoreCase = true) } -> "Safe"
-        safetyLevels.any { it.contains("Good", ignoreCase = true) } -> "Good"
-        safetyLevels.any { it.contains("Recommended", ignoreCase = true) } -> "Recommended"
-        else -> "Unknown"
-    }
-}
-
-private fun getPrimaryConcern(foodItem: FoodItem, userConditions: List<String>): String? {
-    if (userConditions.isEmpty()) return null
-
-    val relevantRecommendations = userConditions.mapNotNull { condition ->
-        foodItem.recommendations[condition]
-    }
-
-    return relevantRecommendations
-        .flatMap { it.keyPoints }
-        .firstOrNull { point ->
-            point.contains("high", ignoreCase = true) ||
-            point.contains("concern", ignoreCase = true) ||
-            point.contains("limit", ignoreCase = true) ||
-            point.contains("avoid", ignoreCase = true)
-        }
-}
-
-private fun getServingAdvice(foodItem: FoodItem, userConditions: List<String>): String? {
-    if (userConditions.isEmpty()) return null
-
-    val relevantRecommendations = userConditions.mapNotNull { condition ->
-        foodItem.recommendations[condition]
-    }
-
-    return relevantRecommendations
-        .mapNotNull { it.servingAdvice }
-        .firstOrNull { it.isNotBlank() }
 }

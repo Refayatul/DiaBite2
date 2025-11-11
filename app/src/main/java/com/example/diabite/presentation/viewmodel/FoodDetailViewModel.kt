@@ -37,7 +37,7 @@ class FoodDetailViewModel @Inject constructor(
     val error: StateFlow<String?> = _error.asStateFlow()
 
     // Expanded sections state
-    private val _expandedSections = MutableStateFlow<Set<String>>(emptySet())
+    private val _expandedSections = MutableStateFlow(setOf("nutrition", "conditions", "alternatives"))
     val expandedSections: StateFlow<Set<String>> = _expandedSections.asStateFlow()
 
     init {
@@ -54,8 +54,7 @@ class FoodDetailViewModel @Inject constructor(
                 _error.value = null
 
                 // Load main food item
-                val foodResult = foodRepository.getFoodById(foodId)
-                foodResult.collect { resource ->
+                foodRepository.getFoodById(foodId).collect { resource ->
                     when (resource) {
                         is Resource.Success -> {
                             val food = resource.data
@@ -64,15 +63,16 @@ class FoodDetailViewModel @Inject constructor(
                                 // Load alternatives
                                 loadAlternatives(food.id)
                             }
+                            _isLoading.value = false
                         }
                         is Resource.Error -> {
                             _error.value = resource.error?.userMessage ?: "Failed to load food details"
+                            _isLoading.value = false
                         }
                         is Resource.Loading -> {
                             // Keep loading state
                         }
                     }
-                    _isLoading.value = false
                 }
 
             } catch (e: Exception) {
@@ -88,8 +88,7 @@ class FoodDetailViewModel @Inject constructor(
     private fun loadAlternatives(foodId: String) {
         viewModelScope.launch {
             try {
-                val alternativesResult = foodRepository.getAlternatives(foodId)
-                alternativesResult.collect { resource ->
+                foodRepository.getAlternatives(foodId).collect { resource ->
                     when (resource) {
                         is Resource.Success -> {
                             _alternatives.value = resource.data ?: emptyList()
@@ -135,66 +134,5 @@ class FoodDetailViewModel @Inject constructor(
      */
     fun retry() {
         loadFoodDetails()
-    }
-
-    /**
-     * Get safety rating for user's conditions
-     */
-    fun getSafetyRating(foodItem: FoodItem, userConditions: List<String>): String {
-        if (userConditions.isEmpty()) return "Unknown"
-
-        val relevantRecommendations = userConditions.mapNotNull { condition ->
-            foodItem.recommendations[condition]
-        }
-
-        if (relevantRecommendations.isEmpty()) return "Unknown"
-
-        // Determine overall safety based on recommendations
-        val safetyLevels = relevantRecommendations.map { it.safetyLevel }
-
-        return when {
-            safetyLevels.any { it.contains("Avoid", ignoreCase = true) } -> "Avoid"
-            safetyLevels.any { it.contains("Caution", ignoreCase = true) } -> "Caution"
-            safetyLevels.any { it.contains("Safe", ignoreCase = true) } -> "Safe"
-            safetyLevels.any { it.contains("Good", ignoreCase = true) } -> "Good"
-            safetyLevels.any { it.contains("Recommended", ignoreCase = true) } -> "Recommended"
-            else -> "Unknown"
-        }
-    }
-
-    /**
-     * Get primary concern for user's conditions
-     */
-    fun getPrimaryConcern(foodItem: FoodItem, userConditions: List<String>): String? {
-        if (userConditions.isEmpty()) return null
-
-        val relevantRecommendations = userConditions.mapNotNull { condition ->
-            foodItem.recommendations[condition]
-        }
-
-        // Return the most concerning advice
-        return relevantRecommendations
-            .flatMap { it.keyPoints }
-            .firstOrNull { point ->
-                point.contains("high", ignoreCase = true) ||
-                point.contains("concern", ignoreCase = true) ||
-                point.contains("limit", ignoreCase = true) ||
-                point.contains("avoid", ignoreCase = true)
-            }
-    }
-
-    /**
-     * Get serving advice for user's conditions
-     */
-    fun getServingAdvice(foodItem: FoodItem, userConditions: List<String>): String? {
-        if (userConditions.isEmpty()) return null
-
-        val relevantRecommendations = userConditions.mapNotNull { condition ->
-            foodItem.recommendations[condition]
-        }
-
-        return relevantRecommendations
-            .mapNotNull { it.servingAdvice }
-            .firstOrNull { it.isNotBlank() }
     }
 }
