@@ -14,7 +14,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -29,9 +29,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -48,25 +45,16 @@ import com.example.diabite.util.Resource
 @Composable
 fun MedicalConditionsScreen(
     navController: NavController,
-    email: String,
-    password: String,
-    displayName: String,
-    dateOfBirth: String,
-    biologicalSex: String,
     authViewModel: AuthViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
     val signUpState by authViewModel.signUpState.collectAsState()
+    val registrationState by authViewModel.registrationState.collectAsState()
 
-    // Reset signup state when entering this screen to prevent unwanted navigation
     LaunchedEffect(Unit) {
         authViewModel.resetAuthState()
     }
 
-    // Medical conditions state
-    var selectedConditions by remember { mutableStateOf(setOf<String>()) }
-
-    // Medical conditions options
     val diabetesConditions = listOf(
         "Diabetes Type 1",
         "Diabetes Type 2",
@@ -86,20 +74,22 @@ fun MedicalConditionsScreen(
         "Pregnancy"
     )
 
-    val hasDiabetesSelected = selectedConditions.any { condition ->
+    val hasDiabetesSelected = registrationState.primaryConditions.any { condition ->
         diabetesConditions.contains(condition)
     }
 
-    // Handle sign up state changes
     LaunchedEffect(signUpState) {
-        when (signUpState) {
-            is Resource.Success<*> -> {
-                Toast.makeText(context, "Account created successfully!", Toast.LENGTH_SHORT).show()
-                navController.navigate(Route.Home) {
-                    popUpTo(Route.Login) { inclusive = true }
+        when (val state = signUpState) {
+            is Resource.Success -> {
+                if (state.data != null) { // Only navigate on successful registration
+                    Toast.makeText(context, "Account created successfully!", Toast.LENGTH_SHORT).show()
+                    authViewModel.clearRegistrationData()
+                    navController.navigate(Route.Home) {
+                        popUpTo(Route.Login) { inclusive = true }
+                    }
                 }
             }
-            is Resource.Error<*> -> {
+            is Resource.Error -> {
                 // Error is handled in the UI below
             }
             else -> {}
@@ -130,7 +120,7 @@ fun MedicalConditionsScreen(
                     horizontalArrangement = Arrangement.Start
                 ) {
                     IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.Filled.ArrowBack, contentDescription = "Back", tint = MaterialTheme.colorScheme.primary)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = MaterialTheme.colorScheme.primary)
                     }
                 }
 
@@ -153,7 +143,6 @@ fun MedicalConditionsScreen(
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                // Diabetes Conditions Section
                 Text(
                     "Diabetes Related",
                     style = MaterialTheme.typography.titleMedium.copy(
@@ -168,20 +157,22 @@ fun MedicalConditionsScreen(
                 diabetesConditions.forEach { condition ->
                     MedicalConditionCheckbox(
                         condition = condition,
-                        isSelected = selectedConditions.contains(condition),
+                        isSelected = registrationState.primaryConditions.contains(condition),
                         onCheckedChange = { checked ->
-                            selectedConditions = if (checked) {
-                                selectedConditions + condition
+                            val updatedConditions = if (checked) {
+                                registrationState.primaryConditions + condition
                             } else {
-                                selectedConditions - condition
+                                registrationState.primaryConditions.filter { it != condition }
                             }
+                            // Also update the diabetes type if a diabetes condition is selected
+                            val diabetesType = updatedConditions.firstOrNull { it in diabetesConditions } ?: ""
+                            authViewModel.updateRegistrationState(registrationState.copy(primaryConditions = updatedConditions, diabetesType = diabetesType))
                         }
                     )
                 }
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                // Other Conditions Section
                 Text(
                     "Other Conditions",
                     style = MaterialTheme.typography.titleMedium.copy(
@@ -196,13 +187,14 @@ fun MedicalConditionsScreen(
                 otherConditions.forEach { condition ->
                     MedicalConditionCheckbox(
                         condition = condition,
-                        isSelected = selectedConditions.contains(condition),
+                        isSelected = registrationState.primaryConditions.contains(condition),
                         onCheckedChange = { checked ->
-                            selectedConditions = if (checked) {
-                                selectedConditions + condition
+                            val updatedConditions = if (checked) {
+                                registrationState.primaryConditions + condition
                             } else {
-                                selectedConditions - condition
+                                registrationState.primaryConditions.filter { it != condition }
                             }
+                            authViewModel.updateRegistrationState(registrationState.copy(primaryConditions = updatedConditions))
                         }
                     )
                 }
@@ -218,7 +210,6 @@ fun MedicalConditionsScreen(
 
                 Spacer(modifier = Modifier.height(32.dp))
 
-                // Navigation Buttons
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -233,37 +224,22 @@ fun MedicalConditionsScreen(
                     Button(
                         onClick = {
                             if (hasDiabetesSelected) {
-                                // Navigate to diabetes details screen
-                                navController.navigate(
-                                    Route.DiabetesDetails(
-                                        email = email,
-                                        password = password,
-                                        displayName = displayName,
-                                        dateOfBirth = dateOfBirth,
-                                        biologicalSex = biologicalSex,
-                                        primaryConditions = selectedConditions.toList(),
-                                        diabetesType = "",
-                                        selectedMedications = emptyList(),
-                                        otherMedication = ""
-                                    )
-                                )
+                                navController.navigate(Route.DiabetesDetails)
                             } else {
-                                // Complete registration without diabetes details
-                                // Call signUpWithProfile with empty diabetes fields
                                 authViewModel.signUpWithProfile(
-                                    email = email,
-                                    password = password,
-                                    displayName = displayName,
-                                    dateOfBirth = dateOfBirth,
-                                    biologicalSex = biologicalSex,
-                                    primaryConditions = selectedConditions.toList(),
+                                    email = registrationState.email,
+                                    password = registrationState.password,
+                                    displayName = registrationState.displayName,
+                                    dateOfBirth = registrationState.dateOfBirth,
+                                    biologicalSex = registrationState.biologicalSex,
+                                    primaryConditions = registrationState.primaryConditions,
                                     diabetesType = "",
                                     diabetesMedications = emptyList()
                                 )
                             }
                         },
                         modifier = Modifier.weight(1f).height(48.dp),
-                        enabled = true // Always enabled since no validation required
+                        enabled = true
                     ) {
                         Text(if (hasDiabetesSelected) "Next: Diabetes Details" else "Complete Registration")
                     }

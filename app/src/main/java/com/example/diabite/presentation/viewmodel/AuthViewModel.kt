@@ -14,6 +14,19 @@ import kotlinx.coroutines.launch
 import timber.log.Timber
 import javax.inject.Inject
 
+// Data class to hold the state for the multi-step registration process
+data class RegistrationState(
+    val email: String = "",
+    val password: String = "",
+    val displayName: String = "",
+    val dateOfBirth: String = "",
+    val biologicalSex: String = "",
+    val primaryConditions: List<String> = emptyList(),
+    val diabetesType: String = "",
+    val selectedMedications: List<String> = emptyList(),
+    val otherMedication: String = ""
+)
+
 @HiltViewModel
 class AuthViewModel @Inject constructor(
     private val authRepository: AuthRepository
@@ -39,6 +52,18 @@ class AuthViewModel @Inject constructor(
 
     private val _passwordResetState = MutableStateFlow<Resource<Unit>>(Resource.loading())
     val passwordResetState: StateFlow<Resource<Unit>> = _passwordResetState.asStateFlow()
+    
+    // State for the multi-step registration
+    private val _registrationState = MutableStateFlow(RegistrationState())
+    val registrationState: StateFlow<RegistrationState> = _registrationState.asStateFlow()
+
+    fun updateRegistrationState(newState: RegistrationState) {
+        _registrationState.value = newState
+    }
+
+    fun clearRegistrationData() {
+        _registrationState.value = RegistrationState()
+    }
 
     init {
         checkCurrentUser()

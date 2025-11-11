@@ -15,16 +15,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -35,9 +32,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -48,7 +42,6 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.example.diabite.common.Route
-import com.example.diabite.data.model.UserProfile
 import com.example.diabite.presentation.theme.TextDarkGray
 import com.example.diabite.presentation.viewmodel.AuthViewModel
 import com.example.diabite.util.Resource
@@ -57,36 +50,11 @@ import com.example.diabite.util.Resource
 @Composable
 fun DiabetesDetailsScreen(
     navController: NavController,
-    email: String,
-    password: String,
-    displayName: String,
-    dateOfBirth: String,
-    biologicalSex: String,
-    primaryConditions: List<String>,
-    diabetesType: String = "",
-    selectedMedications: List<String> = emptyList(),
-    otherMedication: String = "",
     authViewModel: AuthViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
     val signUpState by authViewModel.signUpState.collectAsState()
-
-    // Diabetes details state - initialize with navigation parameters
-    var diabetesTypeState by remember { mutableStateOf(diabetesType) }
-    var selectedMedicationsState by remember { mutableStateOf(selectedMedications.toSet()) }
-    var otherMedicationState by remember { mutableStateOf(otherMedication) }
-
-    var typeExpanded by remember { mutableStateOf(false) }
-
-    // Validation
-    var diabetesTypeError by remember { mutableStateOf(false) }
-
-    val diabetesTypeOptions = listOf(
-        "Type 1 Diabetes",
-        "Type 2 Diabetes",
-        "Gestational Diabetes",
-        "Other"
-    )
+    val registrationState by authViewModel.registrationState.collectAsState()
 
     val commonMedications = listOf(
         "Metformin",
@@ -103,14 +71,17 @@ fun DiabetesDetailsScreen(
 
     // Handle sign up state changes
     LaunchedEffect(signUpState) {
-        when (signUpState) {
-            is Resource.Success<*> -> {
-                Toast.makeText(context, "Account created successfully!", Toast.LENGTH_SHORT).show()
-                navController.navigate(Route.Home) {
-                    popUpTo(Route.Login) { inclusive = true }
+        when (val state = signUpState) {
+            is Resource.Success -> {
+                if (state.data != null) { // Only navigate on successful registration
+                    Toast.makeText(context, "Account created successfully!", Toast.LENGTH_SHORT).show()
+                    authViewModel.clearRegistrationData()
+                    navController.navigate(Route.Home) {
+                        popUpTo(Route.Login) { inclusive = true }
+                    }
                 }
             }
-            is Resource.Error<*> -> {
+            is Resource.Error -> {
                 // Error is handled in the UI below
             }
             else -> {}
@@ -141,7 +112,7 @@ fun DiabetesDetailsScreen(
                     horizontalArrangement = Arrangement.Start
                 ) {
                     IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.Filled.ArrowBack, contentDescription = "Back", tint = MaterialTheme.colorScheme.primary)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = MaterialTheme.colorScheme.primary)
                     }
                 }
 
@@ -161,42 +132,6 @@ fun DiabetesDetailsScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center
                 )
-
-                Spacer(modifier = Modifier.height(24.dp))
-
-                // Diabetes Type Dropdown
-                ExposedDropdownMenuBox(
-                    expanded = typeExpanded,
-                    onExpandedChange = { typeExpanded = !typeExpanded }
-                ) {
-                    OutlinedTextField(
-                        value = diabetesTypeState,
-                        onValueChange = {},
-                        readOnly = true,
-                        label = { Text("Diabetes Type") },
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = typeExpanded) },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .menuAnchor(),
-                        isError = diabetesTypeError,
-                        supportingText = { if (diabetesTypeError) Text("Please select your diabetes type") }
-                    )
-                    ExposedDropdownMenu(
-                        expanded = typeExpanded,
-                        onDismissRequest = { typeExpanded = false }
-                    ) {
-                        diabetesTypeOptions.forEach { option ->
-                            DropdownMenuItem(
-                                text = { Text(option) },
-                                onClick = {
-                                    diabetesTypeState = option
-                                    typeExpanded = false
-                                    diabetesTypeError = false
-                                }
-                            )
-                        }
-                    }
-                }
 
                 Spacer(modifier = Modifier.height(24.dp))
 
@@ -222,13 +157,14 @@ fun DiabetesDetailsScreen(
                 commonMedications.forEach { medication ->
                     MedicationCheckbox(
                         medication = medication,
-                        isSelected = selectedMedicationsState.contains(medication),
+                        isSelected = registrationState.selectedMedications.contains(medication),
                         onCheckedChange = { checked ->
-                            selectedMedicationsState = if (checked) {
-                                selectedMedicationsState + medication
+                            val updatedMedications = if (checked) {
+                                registrationState.selectedMedications + medication
                             } else {
-                                selectedMedicationsState - medication
+                                registrationState.selectedMedications - medication
                             }
+                            authViewModel.updateRegistrationState(registrationState.copy(selectedMedications = updatedMedications))
                         }
                     )
                 }
@@ -237,8 +173,8 @@ fun DiabetesDetailsScreen(
 
                 // Other medication field
                 OutlinedTextField(
-                    value = otherMedicationState,
-                    onValueChange = { otherMedicationState = it },
+                    value = registrationState.otherMedication,
+                    onValueChange = { authViewModel.updateRegistrationState(registrationState.copy(otherMedication = it)) },
                     label = { Text("Other Medication (Optional)") },
                     placeholder = { Text("Enter other medication name") },
                     modifier = Modifier.fillMaxWidth(),
@@ -284,28 +220,22 @@ fun DiabetesDetailsScreen(
 
                     Button(
                         onClick = {
-                            diabetesTypeError = diabetesTypeState.isEmpty()
-
-                            if (!diabetesTypeError) {
-                                val allMedications = selectedMedicationsState.toMutableList()
-                                if (otherMedicationState.isNotEmpty()) {
-                                    allMedications.add(otherMedicationState)
-                                }
-
-                                // Call signUpWithProfile to save complete profile
-                                authViewModel.signUpWithProfile(
-                                    email = email,
-                                    password = password,
-                                    displayName = displayName,
-                                    dateOfBirth = dateOfBirth,
-                                    biologicalSex = biologicalSex,
-                                    primaryConditions = primaryConditions,
-                                    diabetesType = diabetesTypeState,
-                                    diabetesMedications = allMedications
-                                )
-                            } else {
-                                Toast.makeText(context, "Please select your diabetes type", Toast.LENGTH_SHORT).show()
+                            val allMedications = registrationState.selectedMedications.toMutableList()
+                            if (registrationState.otherMedication.isNotBlank()) {
+                                allMedications.add(registrationState.otherMedication)
                             }
+
+                            // Call signUpWithProfile to save complete profile
+                            authViewModel.signUpWithProfile(
+                                email = registrationState.email,
+                                password = registrationState.password,
+                                displayName = registrationState.displayName,
+                                dateOfBirth = registrationState.dateOfBirth,
+                                biologicalSex = registrationState.biologicalSex,
+                                primaryConditions = registrationState.primaryConditions,
+                                diabetesType = registrationState.diabetesType, // This is now set in the previous screen
+                                diabetesMedications = allMedications
+                            )
                         },
                         modifier = Modifier.weight(1f).height(48.dp),
                         enabled = signUpState !is Resource.Loading<*>

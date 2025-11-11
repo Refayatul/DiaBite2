@@ -16,29 +16,10 @@ sealed interface Route {
 
     // Multi-step Registration Flow
     @Serializable
-    data class BasicInfo(val email: String = "", val password: String = "") : Route
+    data object MedicalConditions : Route
 
     @Serializable
-    data class MedicalConditions(
-        val email: String,
-        val password: String,
-        val displayName: String,
-        val dateOfBirth: String,
-        val biologicalSex: String
-    ) : Route
-
-    @Serializable
-    data class DiabetesDetails(
-        val email: String,
-        val password: String,
-        val displayName: String,
-        val dateOfBirth: String,
-        val biologicalSex: String,
-        val primaryConditions: List<String>,
-        val diabetesType: String = "",
-        val selectedMedications: List<String> = emptyList(),
-        val otherMedication: String = ""
-    ) : Route
+    data object DiabetesDetails : Route
 
     // Main App Flow (Home Dashboard)
     @Serializable

@@ -8,17 +8,16 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Person
@@ -28,7 +27,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
@@ -36,7 +34,6 @@ import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -47,10 +44,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -65,22 +62,18 @@ import com.example.diabite.presentation.theme.TextDarkGray
 import com.example.diabite.presentation.viewmodel.AuthViewModel
 import com.example.diabite.util.Resource
 import com.google.android.gms.auth.api.signin.GoogleSignIn
-import com.google.android.gms.auth.api.signin.GoogleSignInClient
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.android.gms.common.api.ApiException
 import timber.log.Timber
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
-import android.app.DatePickerDialog
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RegisterScreen(navController: NavController, viewModel: AuthViewModel = hiltViewModel()) {
 
-    // Simple state for initial registration
-    var email by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
+    val registrationState by viewModel.registrationState.collectAsState()
     var confirmPassword by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
     var confirmPasswordVisible by remember { mutableStateOf(false) }
@@ -90,21 +83,12 @@ fun RegisterScreen(navController: NavController, viewModel: AuthViewModel = hilt
     var passwordError by remember { mutableStateOf(false) }
     var confirmPasswordError by remember { mutableStateOf(false) }
     var passwordMatchError by remember { mutableStateOf(false) }
-
-    // Additional state for comprehensive registration
-    var displayName by remember { mutableStateOf("") }
-    var dayOfBirth by remember { mutableStateOf("") }
-    var monthOfBirth by remember { mutableStateOf("") }
-    var yearOfBirth by remember { mutableStateOf("") }
-    var biologicalSex by remember { mutableStateOf("") }
-    var sexExpanded by remember { mutableStateOf(false) }
-
-    // Additional validation state
     var displayNameError by remember { mutableStateOf(false) }
     var dateOfBirthError by remember { mutableStateOf(false) }
     var biologicalSexError by remember { mutableStateOf(false) }
 
-    // Biological sex options
+    var sexExpanded by remember { mutableStateOf(false) }
+
     val biologicalSexOptions = listOf("Male", "Female", "Other", "Prefer not to say")
 
     val context = LocalContext.current
@@ -120,12 +104,10 @@ fun RegisterScreen(navController: NavController, viewModel: AuthViewModel = hilt
                 if (account != null && account.idToken != null) {
                     viewModel.googleSignIn(account.idToken!!)
                 } else {
-                    // Reset loading state and show error
                     viewModel.resetAuthState()
                 }
             } catch (e: ApiException) {
                 Timber.e(e, "Google Sign-In failed")
-                // Reset loading state and show error
                 viewModel.resetAuthState()
             }
         }
@@ -143,14 +125,9 @@ fun RegisterScreen(navController: NavController, viewModel: AuthViewModel = hilt
         when (googleSignInState) {
             is Resource.Success<*> -> {
                 isGoogleSignInLoading = false
-                navController.navigate(Route.Home) {
-                    popUpTo(Route.Signup) { inclusive = true }
-                }
             }
             is Resource.Error<*> -> {
                 isGoogleSignInLoading = false
-                // Error is handled in the UI below
-                // Reset the state after showing error
                 viewModel.resetAuthState()
             }
             else -> {}
@@ -173,7 +150,6 @@ fun RegisterScreen(navController: NavController, viewModel: AuthViewModel = hilt
                 verticalArrangement = Arrangement.Center,
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                // Back Button
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.Start
@@ -201,10 +177,9 @@ fun RegisterScreen(navController: NavController, viewModel: AuthViewModel = hilt
 
                 Spacer(modifier = Modifier.height(32.dp))
 
-                // Email Field
                 OutlinedTextField(
-                    value = email,
-                    onValueChange = { email = it; emailError = false },
+                    value = registrationState.email,
+                    onValueChange = { viewModel.updateRegistrationState(registrationState.copy(email = it)); emailError = false },
                     label = { Text("Email Address") },
                     placeholder = { Text("Enter your email") },
                     modifier = Modifier.fillMaxWidth(),
@@ -217,10 +192,9 @@ fun RegisterScreen(navController: NavController, viewModel: AuthViewModel = hilt
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Password Field
                 OutlinedTextField(
-                    value = password,
-                    onValueChange = { password = it; passwordError = false; passwordMatchError = false },
+                    value = registrationState.password,
+                    onValueChange = { viewModel.updateRegistrationState(registrationState.copy(password = it)); passwordError = false; passwordMatchError = false },
                     label = { Text("Password") },
                     placeholder = { Text("Create a password (min 6 characters)") },
                     modifier = Modifier.fillMaxWidth(),
@@ -245,7 +219,6 @@ fun RegisterScreen(navController: NavController, viewModel: AuthViewModel = hilt
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Confirm Password Field
                 OutlinedTextField(
                     value = confirmPassword,
                     onValueChange = { confirmPassword = it; confirmPasswordError = false; passwordMatchError = false },
@@ -270,13 +243,9 @@ fun RegisterScreen(navController: NavController, viewModel: AuthViewModel = hilt
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                // Additional fields for comprehensive registration
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Display Name Field
                 OutlinedTextField(
-                    value = displayName,
-                    onValueChange = { displayName = it; displayNameError = false },
+                    value = registrationState.displayName,
+                    onValueChange = { viewModel.updateRegistrationState(registrationState.copy(displayName = it)); displayNameError = false },
                     label = { Text("Full Name") },
                     placeholder = { Text("Enter your full name") },
                     modifier = Modifier.fillMaxWidth(),
@@ -288,7 +257,6 @@ fun RegisterScreen(navController: NavController, viewModel: AuthViewModel = hilt
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Date of Birth Fields - Day, Month, Year
                 Text(
                     "Date of Birth",
                     style = MaterialTheme.typography.bodyLarge,
@@ -302,12 +270,14 @@ fun RegisterScreen(navController: NavController, viewModel: AuthViewModel = hilt
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    // Day Field
                     OutlinedTextField(
-                        value = dayOfBirth,
+                        value = registrationState.dateOfBirth.split("/").getOrElse(1) { "" },
                         onValueChange = {
                             if (it.length <= 2 && it.all { char -> char.isDigit() }) {
-                                dayOfBirth = it
+                                val parts = registrationState.dateOfBirth.split("/").toMutableList()
+                                while (parts.size < 3) parts.add("")
+                                parts[1] = it
+                                viewModel.updateRegistrationState(registrationState.copy(dateOfBirth = parts.joinToString("/")))
                                 dateOfBirthError = false
                             }
                         },
@@ -319,12 +289,14 @@ fun RegisterScreen(navController: NavController, viewModel: AuthViewModel = hilt
                         textStyle = androidx.compose.ui.text.TextStyle(textAlign = TextAlign.Center)
                     )
 
-                    // Month Field
                     OutlinedTextField(
-                        value = monthOfBirth,
+                        value = registrationState.dateOfBirth.split("/").getOrElse(0) { "" },
                         onValueChange = {
                             if (it.length <= 2 && it.all { char -> char.isDigit() }) {
-                                monthOfBirth = it
+                                val parts = registrationState.dateOfBirth.split("/").toMutableList()
+                                while (parts.size < 3) parts.add("")
+                                parts[0] = it
+                                viewModel.updateRegistrationState(registrationState.copy(dateOfBirth = parts.joinToString("/")))
                                 dateOfBirthError = false
                             }
                         },
@@ -336,12 +308,14 @@ fun RegisterScreen(navController: NavController, viewModel: AuthViewModel = hilt
                         textStyle = androidx.compose.ui.text.TextStyle(textAlign = TextAlign.Center)
                     )
 
-                    // Year Field
                     OutlinedTextField(
-                        value = yearOfBirth,
+                        value = registrationState.dateOfBirth.split("/").getOrElse(2) { "" },
                         onValueChange = {
                             if (it.length <= 4 && it.all { char -> char.isDigit() }) {
-                                yearOfBirth = it
+                                val parts = registrationState.dateOfBirth.split("/").toMutableList()
+                                while (parts.size < 3) parts.add("")
+                                parts[2] = it
+                                viewModel.updateRegistrationState(registrationState.copy(dateOfBirth = parts.joinToString("/")))
                                 dateOfBirthError = false
                             }
                         },
@@ -366,13 +340,12 @@ fun RegisterScreen(navController: NavController, viewModel: AuthViewModel = hilt
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Biological Sex Dropdown
                 ExposedDropdownMenuBox(
                     expanded = sexExpanded,
                     onExpandedChange = { sexExpanded = !sexExpanded }
                 ) {
                     OutlinedTextField(
-                        value = biologicalSex,
+                        value = registrationState.biologicalSex,
                         onValueChange = {},
                         readOnly = true,
                         label = { Text("Biological Sex") },
@@ -391,7 +364,7 @@ fun RegisterScreen(navController: NavController, viewModel: AuthViewModel = hilt
                             DropdownMenuItem(
                                 text = { Text(option) },
                                 onClick = {
-                                    biologicalSex = option
+                                    viewModel.updateRegistrationState(registrationState.copy(biologicalSex = option))
                                     sexExpanded = false
                                     biologicalSexError = false
                                 }
@@ -402,43 +375,31 @@ fun RegisterScreen(navController: NavController, viewModel: AuthViewModel = hilt
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                // Sign Up Button - Navigate to medical conditions
                 Button(
                     onClick = {
-                        // Comprehensive validation
-                        emailError = email.isEmpty() || !android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches()
-                        passwordError = password.length < 6
+                        emailError = registrationState.email.isEmpty() || !android.util.Patterns.EMAIL_ADDRESS.matcher(registrationState.email).matches()
+                        passwordError = registrationState.password.length < 6
                         confirmPasswordError = confirmPassword.isEmpty()
-                        passwordMatchError = password != confirmPassword
-                        displayNameError = displayName.isEmpty()
+                        passwordMatchError = registrationState.password != confirmPassword
+                        displayNameError = registrationState.displayName.isEmpty()
 
-                        // Validate date fields
-                        val day = dayOfBirth.toIntOrNull()
-                        val month = monthOfBirth.toIntOrNull()
-                        val year = yearOfBirth.toIntOrNull()
+                        val dobParts = registrationState.dateOfBirth.split("/")
+                        val day = dobParts.getOrNull(1)?.toIntOrNull()
+                        val month = dobParts.getOrNull(0)?.toIntOrNull()
+                        val year = dobParts.getOrNull(2)?.toIntOrNull()
 
-                        dateOfBirthError = dayOfBirth.isEmpty() || monthOfBirth.isEmpty() || yearOfBirth.isEmpty() ||
-                                day == null || month == null || year == null ||
+                        dateOfBirthError = registrationState.dateOfBirth.isEmpty() || day == null || month == null || year == null ||
                                 day !in 1..31 || month !in 1..12 || year < 1900 || year > Calendar.getInstance().get(Calendar.YEAR) ||
                                 !isValidDateComponents(day, month, year)
 
-                        biologicalSexError = biologicalSex.isEmpty()
+                        biologicalSexError = registrationState.biologicalSex.isEmpty()
 
                         if (!emailError && !passwordError && !confirmPasswordError && !passwordMatchError &&
                             !displayNameError && !dateOfBirthError && !biologicalSexError) {
-                            // Combine date components into MM/dd/yyyy format
                             val dateOfBirth = String.format(Locale.getDefault(), "%02d/%02d/%04d", month, day, year)
+                            viewModel.updateRegistrationState(registrationState.copy(dateOfBirth = dateOfBirth))
 
-                            // Navigate to medical conditions
-                            navController.navigate(
-                                Route.MedicalConditions(
-                                    email = email,
-                                    password = password,
-                                    displayName = displayName,
-                                    dateOfBirth = dateOfBirth,
-                                    biologicalSex = biologicalSex
-                                )
-                            )
+                            navController.navigate(Route.MedicalConditions)
                         }
                     },
                     modifier = Modifier.fillMaxWidth().height(48.dp)
@@ -446,7 +407,6 @@ fun RegisterScreen(navController: NavController, viewModel: AuthViewModel = hilt
                     Text("Continue to Medical Conditions")
                 }
 
-                // Google Sign-In Button
                 Spacer(modifier = Modifier.height(16.dp))
                 Button(
                     onClick = {
@@ -492,7 +452,6 @@ fun RegisterScreen(navController: NavController, viewModel: AuthViewModel = hilt
                     }
                 }
 
-                // Google Sign-In Error message
                 if (googleSignInState is Resource.Error<*>) {
                     Spacer(modifier = Modifier.height(8.dp))
                     val googleError = (googleSignInState as Resource.Error<*>).error
@@ -511,7 +470,6 @@ fun RegisterScreen(navController: NavController, viewModel: AuthViewModel = hilt
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Link back to login
                 TextButton(onClick = { navController.navigate(Route.Login) }) {
                     Text("Already have an account? Login", color = MaterialTheme.colorScheme.primary,
                         style = MaterialTheme.typography.bodySmall)
@@ -521,7 +479,6 @@ fun RegisterScreen(navController: NavController, viewModel: AuthViewModel = hilt
     }
 }
 
-// Helper function to validate date format
 private fun isValidDate(dateString: String): Boolean {
     return try {
         val format = SimpleDateFormat("MM/dd/yyyy", Locale.getDefault())
@@ -533,10 +490,8 @@ private fun isValidDate(dateString: String): Boolean {
     }
 }
 
-// Helper function to validate individual date components
 private fun isValidDateComponents(day: Int, month: Int, year: Int): Boolean {
     return try {
-        // Check if the date components form a valid date
         val calendar = Calendar.getInstance()
         calendar.setLenient(false)
         calendar.set(year, month - 1, day) // Month is 0-based in Calendar
