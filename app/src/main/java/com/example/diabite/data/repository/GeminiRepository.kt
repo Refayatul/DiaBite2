@@ -23,13 +23,18 @@ class GeminiRepository(
     /**
      * Analyze food using Gemini AI Cloud Function
      */
-    fun analyzeFood(foodName: String, userConditions: List<String>): Flow<Resource<FoodItem>> = callbackFlow {
+    fun analyzeFood(foodName: String, userConditions: List<String>, diabetesType: String?): Flow<Resource<FoodItem>> = callbackFlow {
         trySend(Resource.loading())
 
         val data = hashMapOf(
             "foodName" to foodName.trim(),
             "userConditions" to userConditions
         )
+
+        // Add diabetesType to the payload if it's not null or blank
+        if (!diabetesType.isNullOrBlank()) {
+            data["diabetesType"] = diabetesType
+        }
 
         val task = functions
             .getHttpsCallable("geminiFoodAnalysis")

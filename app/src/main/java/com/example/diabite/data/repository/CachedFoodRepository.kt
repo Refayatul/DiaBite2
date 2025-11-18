@@ -7,7 +7,6 @@ import com.example.diabite.util.AppError
 import com.example.diabite.util.Resource
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.flow.first
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -18,12 +17,12 @@ class CachedFoodRepository @Inject constructor(
     private val geminiRepository: GeminiRepository
 ) : FoodRepository {
 
-    override fun searchFood(query: String, userConditions: List<String>): Flow<Resource<List<FoodItem>>> = flow {
+    override fun searchFood(query: String, userConditions: List<String>, diabetesType: String?): Flow<Resource<List<FoodItem>>> = flow {
         emit(Resource.loading())
 
         try {
             // First, search Firestore for existing foods
-            val firestoreResult = firestoreRepository.searchFood(query, userConditions)
+            val firestoreResult = firestoreRepository.searchFood(query, userConditions, diabetesType)
 
             firestoreResult.collect { resource ->
                 when (resource) {
@@ -38,12 +37,12 @@ class CachedFoodRepository @Inject constructor(
                             emit(Resource.success(foods))
                         } else {
                             // No foods found in Firestore - try Gemini AI analysis
-                            emitGeminiAnalysisResult(query, userConditions)
+                            emitGeminiAnalysisResult(query, userConditions, diabetesType)
                         }
                     }
                     is Resource.Error -> {
                         // Firestore search failed - try Gemini as fallback
-                        emitGeminiAnalysisResult(query, userConditions)
+                        emitGeminiAnalysisResult(query, userConditions, diabetesType)
                     }
                     is Resource.Loading -> {
                         // Pass through loading state
@@ -53,16 +52,16 @@ class CachedFoodRepository @Inject constructor(
             }
         } catch (e: Exception) {
             // Try Gemini as last resort
-            emitGeminiAnalysisResult(query, userConditions)
+            emitGeminiAnalysisResult(query, userConditions, diabetesType)
         }
     }
 
     /**
      * Emit Gemini analysis result for a food query
      */
-    private suspend fun kotlinx.coroutines.flow.FlowCollector<Resource<List<FoodItem>>>.emitGeminiAnalysisResult(query: String, userConditions: List<String>) {
+    private suspend fun kotlinx.coroutines.flow.FlowCollector<Resource<List<FoodItem>>>.emitGeminiAnalysisResult(query: String, userConditions: List<String>, diabetesType: String?) {
         try {
-            geminiRepository.analyzeFood(query, userConditions).collect { resource ->
+            geminiRepository.analyzeFood(query, userConditions, diabetesType).collect { resource ->
                 when (resource) {
                     is Resource.Success -> {
                         val foodItem = resource.data

@@ -54,18 +54,32 @@ class AuthRepositoryImpl @Inject constructor(
             val firebaseUser = result.user
             if (firebaseUser != null) {
                 // Get user profile from Firestore
-                val userDoc = firestore.collection("users").document(firebaseUser.uid).get().await()
+                val userDocRef = firestore.collection("users").document(firebaseUser.uid)
+                val userDoc = userDocRef.get().await()
+
                 val user = if (userDoc.exists()) {
                     userDoc.toObject(User::class.java)?.copy(
                         lastLoginAt = System.currentTimeMillis()
-                    ) ?: createDefaultUser(firebaseUser)
+                    ) ?: run {
+                        // Document exists but mapping failed, return default user without overwriting
+                        Timber.w("Failed to map user profile during login. Returning basic user.")
+                        createDefaultUser(firebaseUser)
+                    }
                 } else {
-                    createDefaultUser(firebaseUser)
+                    // Document does not exist, create a new User and save it
+                    val newUser = User(
+                        uid = firebaseUser.uid,
+                        email = firebaseUser.email ?: "",
+                        displayName = firebaseUser.displayName ?: "",
+                        createdAt = System.currentTimeMillis(),
+                        lastLoginAt = System.currentTimeMillis()
+                    )
+                    userDocRef.set(newUser).await()
+                    newUser
                 }
 
-                // Update last login
-                firestore.collection("users").document(firebaseUser.uid)
-                    .update("lastLoginAt", System.currentTimeMillis()).await()
+                // Update last login (if it was an existing user)
+                userDocRef.update("lastLoginAt", System.currentTimeMillis()).await()
 
                 emit(Resource.success(user))
             } else {
@@ -86,13 +100,19 @@ class AuthRepositoryImpl @Inject constructor(
             val firebaseUser = result.user
             if (firebaseUser != null) {
                 // Check if user profile exists
-                val userDoc = firestore.collection("users").document(firebaseUser.uid).get().await()
+                val userDocRef = firestore.collection("users").document(firebaseUser.uid)
+                val userDoc = userDocRef.get().await()
+
                 val user = if (userDoc.exists()) {
                     userDoc.toObject(User::class.java)?.copy(
                         lastLoginAt = System.currentTimeMillis()
-                    ) ?: createDefaultUser(firebaseUser)
+                    ) ?: run {
+                        // Document exists but mapping failed, return default user without overwriting
+                        Timber.w("Failed to map user profile during Google sign-in. Returning basic user.")
+                        createDefaultUser(firebaseUser)
+                    }
                 } else {
-                    // Create new user profile for Google sign-in
+                    // Document does not exist, create a new User profile for Google sign-in and save it
                     val newUser = User(
                         uid = firebaseUser.uid,
                         email = firebaseUser.email ?: "",
@@ -100,13 +120,12 @@ class AuthRepositoryImpl @Inject constructor(
                         createdAt = System.currentTimeMillis(),
                         lastLoginAt = System.currentTimeMillis()
                     )
-                    firestore.collection("users").document(firebaseUser.uid).set(newUser).await()
+                    userDocRef.set(newUser).await()
                     newUser
                 }
 
                 // Update last login
-                firestore.collection("users").document(firebaseUser.uid)
-                    .update("lastLoginAt", System.currentTimeMillis()).await()
+                userDocRef.update("lastLoginAt", System.currentTimeMillis()).await()
 
                 emit(Resource.success(user))
             } else {
@@ -136,13 +155,26 @@ class AuthRepositoryImpl @Inject constructor(
     override fun getCurrentUser(): Flow<User?> = flow {
         val firebaseUser = firebaseAuth.currentUser
         if (firebaseUser != null) {
+            val userDocRef = firestore.collection("users").document(firebaseUser.uid)
             try {
-                val userDoc = firestore.collection("users").document(firebaseUser.uid).get().await()
-                val user = userDoc.toObject(User::class.java)
+                val userDoc = userDocRef.get().await()
+
+                val user = if (userDoc.exists()) {
+                    userDoc.toObject(User::class.java) ?: run {
+                        // Document exists but mapping failed. DO NOT OVERWRITE.
+                        Timber.w("Failed to map user profile from existing document. Falling back to basic user.")
+                        createDefaultUser(firebaseUser)
+                    }
+                } else {
+                    // Document does not exist. Create, save, and return the new user.
+                    val newUser = createDefaultUser(firebaseUser)
+                    userDocRef.set(newUser).await()
+                    newUser
+                }
                 emit(user)
             } catch (e: Exception) {
-                Timber.w(e, "Failed to get user profile from Firestore, using fallback")
-                // Fallback to basic user info if Firestore fails
+                // Network/Firebase error on read. DO NOT OVERWRITE.
+                Timber.w(e, "Failed to read user profile from Firestore. Returning basic user data as temporary fallback.")
                 emit(createDefaultUser(firebaseUser))
             }
         } else {

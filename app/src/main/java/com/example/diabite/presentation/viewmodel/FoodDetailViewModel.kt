@@ -4,18 +4,22 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.diabite.data.model.FoodItem
+import com.example.diabite.domain.repository.AuthRepository
 import com.example.diabite.domain.repository.FoodRepository
+import com.example.diabite.util.ConditionNormalizer
 import com.example.diabite.util.Resource
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
 class FoodDetailViewModel @Inject constructor(
     private val foodRepository: FoodRepository,
+    private val authRepository: AuthRepository,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
@@ -29,6 +33,12 @@ class FoodDetailViewModel @Inject constructor(
     private val _alternatives = MutableStateFlow<List<FoodItem>>(emptyList())
     val alternatives: StateFlow<List<FoodItem>> = _alternatives.asStateFlow()
 
+    // User profile state
+    private val _userConditions = MutableStateFlow<List<String>>(emptyList())
+    val userConditions: StateFlow<List<String>> = _userConditions.asStateFlow()
+    private val _userDiabetesType = MutableStateFlow<String?>(null)
+    val userDiabetesType: StateFlow<String?> = _userDiabetesType.asStateFlow()
+
     // UI states
     private val _isLoading = MutableStateFlow(true)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
@@ -41,7 +51,22 @@ class FoodDetailViewModel @Inject constructor(
     val expandedSections: StateFlow<Set<String>> = _expandedSections.asStateFlow()
 
     init {
+        loadUserConditions()
         loadFoodDetails()
+    }
+
+    private fun loadUserConditions() {
+        viewModelScope.launch {
+            authRepository.getCurrentUser()
+                .catch { e ->
+                    _error.value = "Could not load user profile. Advice may not be personalized."
+                }
+                .collect { user ->
+                    // Normalize conditions to match food data keys (lowercase with underscores)
+                    _userConditions.value = user?.primaryConditions?.map { ConditionNormalizer.normalizeCondition(it) } ?: emptyList()
+                    _userDiabetesType.value = user?.diabetesType?.let { ConditionNormalizer.normalizeCondition(it) }
+                }
+        }
     }
 
     /**

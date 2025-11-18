@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.diabite.data.model.UserProfile
 import com.example.diabite.domain.repository.AuthRepository
+import com.example.diabite.util.ConditionNormalizer
 import com.example.diabite.util.Resource
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -34,17 +35,19 @@ class UserProfileViewModel @Inject constructor(
                 // Get current user first
                 authRepository.getCurrentUser().collect { user ->
                     if (user != null) {
-                        // In a real implementation, you would fetch the UserProfile from Firestore
-                        // For now, we'll create a mock profile based on the user data
+                        // Normalize conditions after loading from user data for consistent app state usage
+                        val normalizedConditions = user.primaryConditions.map { ConditionNormalizer.normalizeCondition(it) }
+                        val normalizedDiabetesType = user.diabetesType?.let { ConditionNormalizer.normalizeCondition(it) }
+
                         val mockProfile = UserProfile(
                             uid = user.uid,
                             email = user.email,
                             displayName = user.displayName,
-                            dateOfBirth = null, // Would be fetched from Firestore
+                            dateOfBirth = null, 
                             biologicalSex = user.biologicalSex,
-                            primaryConditions = user.primaryConditions,
-                            diabetesType = user.diabetesType,
-                            diabetesMedications = emptyList() // Would be fetched from Firestore
+                            primaryConditions = normalizedConditions, // Use normalized conditions
+                            diabetesType = normalizedDiabetesType, // Use normalized type
+                            diabetesMedications = emptyList()
                         )
                         _profileState.value = ProfileState.Success(mockProfile)
                     } else {
@@ -70,23 +73,27 @@ class UserProfileViewModel @Inject constructor(
                 if (currentState is ProfileState.Success) {
                     val currentProfile = currentState.profile
 
-                    // Create updated profile
+                    // Normalize all conditions before saving to Firestore
+                    val normalizedPrimaryConditions = primaryConditions.map { ConditionNormalizer.normalizeCondition(it) }
+                    val normalizedDiabetesType = diabetesType?.let { ConditionNormalizer.normalizeCondition(it) }
+
+                    // Create updated profile for internal app state
                     val updatedProfile = currentProfile.copy(
-                        primaryConditions = primaryConditions,
-                        diabetesType = diabetesType,
+                        primaryConditions = normalizedPrimaryConditions,
+                        diabetesType = normalizedDiabetesType,
                         diabetesMedications = diabetesMedications,
                         lastUpdated = java.util.Date()
                     )
 
-                    // Update user in repository (this would save to Firestore in real implementation)
+                    // Update user object to be saved to Firestore (uses normalized keys)
                     val user = com.example.diabite.data.model.User(
                         uid = currentProfile.uid,
                         email = currentProfile.email,
                         displayName = currentProfile.displayName,
                         dateOfBirth = currentProfile.dateOfBirth?.let { java.text.SimpleDateFormat("MM/dd/yyyy", java.util.Locale.getDefault()).format(it) } ?: "",
                         biologicalSex = currentProfile.biologicalSex,
-                        primaryConditions = primaryConditions,
-                        diabetesType = diabetesType ?: ""
+                        primaryConditions = normalizedPrimaryConditions,
+                        diabetesType = normalizedDiabetesType ?: ""
                     )
 
                     authRepository.updateUserProfile(user).collect { resource ->

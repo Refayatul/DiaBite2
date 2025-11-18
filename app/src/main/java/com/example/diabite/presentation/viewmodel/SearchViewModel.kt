@@ -47,6 +47,10 @@ class SearchViewModel @Inject constructor(
     private val _userConditions = MutableStateFlow<List<String>>(emptyList())
     val userConditions: StateFlow<List<String>> = _userConditions.asStateFlow()
 
+    // User diabetes type state
+    private val _userDiabetesType = MutableStateFlow<String?>("")
+    val userDiabetesType: StateFlow<String?> = _userDiabetesType.asStateFlow()
+
     // UI states
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
@@ -68,18 +72,19 @@ class SearchViewModel @Inject constructor(
 
     init {
         loadSearchHistory()
-        loadUserConditions()
+        loadUserConditionsAndDiabetesType()
         setupSearchFlow()
     }
 
     /**
-     * Load user conditions from auth repository
+     * Load user conditions and diabetes type from auth repository
      */
-    private fun loadUserConditions() {
+    private fun loadUserConditionsAndDiabetesType() {
         viewModelScope.launch {
             try {
                 val user = authRepository.getCurrentUser().first()
                 _userConditions.value = user?.primaryConditions ?: emptyList()
+                _userDiabetesType.value = user?.diabetesType ?: "" // Also load diabetesType
             } catch (e: Exception) {
                 _error.value = "Failed to load user profile"
             }
@@ -111,7 +116,8 @@ class SearchViewModel @Inject constructor(
                 .filter { it.isNotBlank() && it.length >= 2 } // Minimum 2 characters
                 .distinctUntilChanged()
                 .collect { query ->
-                    performSearch(query, _userConditions.value).collect { resource ->
+                    // Pass both conditions and diabetes type to performSearch
+                    performSearch(query, _userConditions.value, _userDiabetesType.value).collect { resource ->
                         when (resource) {
                             is Resource.Success -> {
                                 val foods = resource.data ?: emptyList()
@@ -139,15 +145,15 @@ class SearchViewModel @Inject constructor(
     /**
      * Perform the actual search
      */
-    private fun performSearch(query: String, userConditions: List<String>) = kotlinx.coroutines.flow.flow<Resource<List<FoodItem>>> { 
+    private fun performSearch(query: String, userConditions: List<String>, diabetesType: String?) = kotlinx.coroutines.flow.flow<Resource<List<FoodItem>>> { 
         try {
             emit(Resource.Loading<List<FoodItem>>()) 
 
             // Save search to history
             saveSearchToHistory(query)
 
-            // Perform search with user conditions
-            foodRepository.searchFood(query, userConditions).collect { result ->
+            // Perform search with user conditions and diabetes type
+            foodRepository.searchFood(query, userConditions, diabetesType).collect { result ->
                 emit(result)
             }
 

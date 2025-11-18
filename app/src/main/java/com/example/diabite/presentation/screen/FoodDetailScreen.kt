@@ -61,8 +61,12 @@ fun FoodDetailScreen(
     val error by viewModel.error.collectAsState()
     val expandedSections by viewModel.expandedSections.collectAsState()
 
-    // Mock user conditions - in real app this would come from user profile
-    val userConditions = listOf("diabetes_type2", "hypertension")
+    // Get real user data from the ViewModel (now normalized)
+    val userConditions by viewModel.userConditions.collectAsState()
+    val userDiabetesType by viewModel.userDiabetesType.collectAsState()
+
+    // Combine all normalized conditions (from array and diabetesType)
+    val allUserConditions = (userConditions + listOfNotNull(userDiabetesType)).distinct().filter { it.isNotBlank() }
 
     Scaffold(
         topBar = {
@@ -101,7 +105,7 @@ fun FoodDetailScreen(
                     FoodDetailContent(
                         foodItem = foodItem!!,
                         alternatives = alternatives,
-                        userConditions = userConditions,
+                        userConditions = allUserConditions, // Pass normalized keys
                         expandedSections = expandedSections,
                         onSectionToggle = { viewModel.toggleSection(it) },
                         onAlternativeClick = { alternative ->
@@ -417,9 +421,11 @@ private fun ConditionAdviceSection(
             Spacer(modifier = Modifier.height(16.dp))
 
             userConditions.forEach { condition ->
+                // Lookup using the normalized key from userConditions
                 foodItem.recommendations[condition]?.let { recommendation ->
                     ConditionAdviceCard(
-                        condition = condition,
+                        // Display the readable version of the key
+                        condition = formatConditionKeyForDisplay(condition),
                         recommendation = recommendation
                     )
                     Spacer(modifier = Modifier.height(12.dp))
@@ -602,7 +608,7 @@ private fun ConditionAdviceCard(
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
             Text(
-                text = condition.replaceFirstChar { it.uppercase() },
+                text = condition, // Use the formatted string from the screen
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurface
@@ -714,5 +720,24 @@ private fun getSafetyRating(foodItem: FoodItem, userConditions: List<String>): S
         statuses.any { it.equals("moderate", ignoreCase = true) } -> "Caution"
         statuses.any { it.equals("good", ignoreCase = true) } -> "Good"
         else -> "Unknown"
+    }
+}
+
+private fun formatConditionKeyForDisplay(normalizedKey: String): String {
+    return when (normalizedKey) {
+        "diabetes_type1" -> "Type 1 Diabetes"
+        "diabetes_type2" -> "Type 2 Diabetes"
+        "prediabetes" -> "Prediabetes"
+        "gestational_diabetes" -> "Gestational Diabetes"
+        "hypertension" -> "Hypertension"
+        "hypotension" -> "Hypotension"
+        "high_cholesterol" -> "High Cholesterol"
+        "coronary_artery_disease" -> "Coronary Artery Disease"
+        "kidney_disease" -> "Kidney Disease"
+        "obesity" -> "Obesity"
+        "pcos" -> "PCOS"
+        "thyroid_disorders" -> "Thyroid Disorders"
+        "pregnancy" -> "Pregnancy"
+        else -> normalizedKey.replace("_", " ").replaceFirstChar { it.uppercase() }
     }
 }

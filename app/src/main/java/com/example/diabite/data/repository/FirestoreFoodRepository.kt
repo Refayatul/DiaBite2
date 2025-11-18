@@ -34,7 +34,7 @@ class FirestoreFoodRepository @Inject constructor(
     private val maxRetries = 3
     private val baseDelayMs = 1000L
 
-    override fun searchFood(query: String, userConditions: List<String>): Flow<Resource<List<FoodItem>>> = flow {
+    override fun searchFood(query: String, userConditions: List<String>, diabetesType: String?): Flow<Resource<List<FoodItem>>> = flow {
         emit(Resource.loading())
 
         try {
@@ -44,6 +44,9 @@ class FirestoreFoodRepository @Inject constructor(
                 emit(Resource.success(emptyList()))
                 return@flow
             }
+
+            // Combine userConditions and diabetesType for comprehensive filtering
+            val allConditions = (userConditions + listOfNotNull(diabetesType)).distinct()
 
             // Search with retry logic
             val result = retryOperation {
@@ -82,16 +85,18 @@ class FirestoreFoodRepository @Inject constructor(
                     }
                 }
 
-                // If user conditions are provided, filter the results
-                if (userConditions.isNotEmpty()) {
+                // If user conditions (including diabetesType) are provided, filter out explicitly unsafe foods
+                if (allConditions.isNotEmpty()) {
                     foods = foods.filter { food ->
-                        userConditions.any { condition ->
+                        // The food is KEPT if it is NOT marked as 'bad' or 'avoid' for ANY condition
+                        val isExplicitlyUnsafe = allConditions.any { condition ->
                             val recommendation = food.recommendations[condition]
                             recommendation?.status?.let { status ->
-                                status.contains("good", ignoreCase = true) ||
-                                status.contains("moderate", ignoreCase = true)
+                                status.contains("bad", ignoreCase = true) ||
+                                status.contains("avoid", ignoreCase = true)
                             } ?: false
                         }
+                        !isExplicitlyUnsafe // Keep food if it is NOT explicitly unsafe
                     }
                 }
                 foods
@@ -439,7 +444,8 @@ private fun com.google.firebase.firestore.DocumentSnapshot.toFoodItem(): FoodIte
                     improvement = altMap["improvement"] as? String ?: "",
                     bestFor = (altMap["bestFor"] as? List<String>) ?: emptyList()
                 )
-            } ?: emptyList(),
+            }
+            ?: emptyList(),
             alternativeReasoning = getString("alternativeReasoning") ?: "",
             glycemicImpact = getString("glycemicImpact") ?: "",
             nutritionalDensity = getString("nutritionalDensity") ?: ""
