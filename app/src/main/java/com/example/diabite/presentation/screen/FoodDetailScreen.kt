@@ -38,8 +38,8 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Divider
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -59,7 +59,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
-import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -216,25 +215,11 @@ private fun FoodDetailContent(
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
     ) {
-        // Diabetes Type Indicator at the top
-        if (diabetesType != null) {
-            DiabetesTypeIndicator(diabetesType = diabetesType)
-            Spacer(modifier = Modifier.height(16.dp))
-        }
-
         FoodHeader(foodItem = foodItem, diabetesType = diabetesType)
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        ExpandableSection(
-            title = "📊 Nutritional Facts",
-            sectionKey = "nutrition",
-            isExpanded = expandedSections.contains("nutrition"),
-            onToggle = onSectionToggle
-        ) {
-            NutritionalFactsSection(foodItem = foodItem)
-        }
-
+        // Diabetes Type Advice - First and auto-expanded
         ExpandableSection(
             title = "🏥 Diabetes Type Advice",
             sectionKey = "diabetes_advice",
@@ -244,6 +229,7 @@ private fun FoodDetailContent(
             ConditionAdviceSection(foodItem = foodItem, diabetesType = diabetesType)
         }
 
+        // Smart Alternatives - Second
         if (alternatives.isNotEmpty()) {
             ExpandableSection(
                 title = "🔄 Smart Alternatives",
@@ -252,12 +238,22 @@ private fun FoodDetailContent(
                 onToggle = onSectionToggle
             ) {
                 AlternativesComparisonSection(
-                    originalFood = foodItem,
+                    originalFood = foodItem!!,
                     alternatives = alternatives,
                     diabetesType = diabetesType,
                     onAlternativeClick = onAlternativeClick
                 )
             }
+        }
+
+        // Nutritional Facts - Third and auto-expanded
+        ExpandableSection(
+            title = "📊 Nutritional Facts",
+            sectionKey = "nutrition",
+            isExpanded = expandedSections.contains("nutrition"),
+            onToggle = onSectionToggle
+        ) {
+            NutritionalFactsSection(foodItem = foodItem)
         }
 
         Spacer(modifier = Modifier.height(32.dp))
@@ -403,19 +399,10 @@ private fun FoodHeader(foodItem: FoodItem, diabetesType: String?) {
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Safety Rating
+            // Safety Rating with reasoning
             val safetyRating = getSafetyRating(foodItem, diabetesType)
-            SafetyRatingDisplay(safetyRating)
-
-            if (diabetesType != null) {
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = "Personalized for: $diabetesType",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center
-                )
-            }
+            val reasoning = getSafetyReasoning(foodItem, diabetesType)
+            SafetyRatingDisplay(safetyRating, reasoning)
         }
     }
 }
@@ -500,7 +487,7 @@ private fun NutritionalFactsSection(foodItem: FoodItem) {
             modifier = Modifier.padding(bottom = 8.dp)
         )
 
-        NutritionalRow("Calories", "${foodItem.calories}")
+        NutritionalRow("Calories", "${foodItem.calories} kcal")
         NutritionalRow("Total Carbohydrates", "${foodItem.totalCarbohydrates}g")
         NutritionalRow("Dietary Fiber", "${foodItem.fiber}g")
         NutritionalRow("Sugars", "${foodItem.sugars}g")
@@ -606,7 +593,7 @@ private fun AlternativesComparisonSection(
 ) {
     Column(modifier = Modifier.padding(16.dp)) {
         Text(
-            text = "Compare with Alternatives",
+            text = "Smart Alternatives",
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface,
@@ -614,7 +601,11 @@ private fun AlternativesComparisonSection(
         )
 
         if (alternatives.isEmpty()) {
-            // ... existing empty state code
+            Text(
+                text = "No alternatives available for this food.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
             return
         }
 
@@ -657,26 +648,15 @@ private fun AlternativesComparisonSection(
             )
         }
 
-        Divider(modifier = Modifier.padding(vertical = 4.dp))
-
-        ComparisonRow(
-            "${originalFood.name} (Current)",
-            originalFood.calories,
-            originalFood.totalCarbohydrates,
-            "N/A",
-            isOriginal = true,
-            diabetesType = diabetesType
-        ) {}
-
-        Divider(modifier = Modifier.padding(vertical = 8.dp))
+        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
 
         alternatives.forEach { alternative ->
             val advantage = diabetesType?.let { dt ->
                 val normalizedKey = normalizeConditionKey(dt)
                 val recommendation = originalFood.recommendations[normalizedKey]
                 recommendation?.alternatives?.find { it.foodId == alternative.id }?.advantage
-                    ?: "Similar"
-            } ?: "Similar"
+                    ?: "Better alternative"
+            } ?: "Better alternative"
 
             ComparisonRow(
                 alternative.name,
@@ -713,7 +693,7 @@ private fun NutritionalHighlight(label: String, value: String) {
 }
 
 @Composable
-private fun SafetyRatingDisplay(safetyRating: String) {
+private fun SafetyRatingDisplay(safetyRating: String, reasoning: String? = null) {
     val (backgroundColor, textColor) = when (safetyRating.lowercase()) {
         "avoid" -> MaterialTheme.colorScheme.errorContainer to MaterialTheme.colorScheme.onErrorContainer
         "caution", "moderate" -> MaterialTheme.colorScheme.tertiaryContainer to MaterialTheme.colorScheme.onTertiaryContainer
@@ -721,19 +701,57 @@ private fun SafetyRatingDisplay(safetyRating: String) {
         else -> MaterialTheme.colorScheme.surfaceVariant to MaterialTheme.colorScheme.onSurfaceVariant
     }
 
-    Box(
-        modifier = Modifier
-            .clip(RoundedCornerShape(24.dp))
-            .background(backgroundColor)
-            .padding(horizontal = 20.dp, vertical = 10.dp),
-        contentAlignment = Alignment.Center
+    Card(
+        colors = CardDefaults.cardColors(containerColor = backgroundColor),
+        shape = RoundedCornerShape(16.dp),
+        modifier = Modifier.fillMaxWidth()
     ) {
-        Text(
-            text = "Safety: $safetyRating",
-            style = MaterialTheme.typography.titleMedium,
-            color = textColor,
-            fontWeight = FontWeight.SemiBold
-        )
+        Column(modifier = Modifier.padding(16.dp)) {
+            // Safety Level Header
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(textColor.copy(alpha = 0.1f))
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "Safety: $safetyRating",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = textColor,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            if (reasoning != null) {
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Reasoning Section
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = textColor.copy(alpha = 0.05f)
+                    ),
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Text(
+                            text = "Assessment",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = textColor,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.padding(bottom = 4.dp)
+                        )
+                        Text(
+                            text = reasoning,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = textColor
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -778,45 +796,13 @@ private fun ConditionAdviceCard(
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            // Header with condition and safety level
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(
-                    text = condition,
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = diabetesColor
-                )
-                SafetyRatingDisplay(recommendation.safetyLevel)
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Safety Level with reasoning
-            Card(
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                shape = RoundedCornerShape(8.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(modifier = Modifier.padding(12.dp)) {
-                    Text(
-                        text = "Safety Assessment: ${recommendation.safetyLevel.replaceFirstChar { it.uppercase() }}",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = recommendation.reasoning,
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontStyle = FontStyle.Italic
-                    )
-                }
-            }
+            // Header with condition
+            Text(
+                text = condition,
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+                color = diabetesColor
+            )
 
             Spacer(modifier = Modifier.height(16.dp))
 
@@ -1191,6 +1177,13 @@ private fun getSafetyRating(foodItem: FoodItem, diabetesType: String?): String {
     val key = normalizeConditionKey(diabetesType)
     val recommendation = foodItem.recommendations[key] ?: return "Unknown"
     return recommendation.safetyLevel.replaceFirstChar { it.uppercase() }
+}
+
+private fun getSafetyReasoning(foodItem: FoodItem, diabetesType: String?): String? {
+    if (diabetesType == null) return null
+    val key = normalizeConditionKey(diabetesType)
+    val recommendation = foodItem.recommendations[key] ?: return null
+    return recommendation.reasoning
 }
 
 

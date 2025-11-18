@@ -51,8 +51,8 @@ class FoodDetailViewModel @Inject constructor(
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
 
-    // Expanded sections state
-    private val _expandedSections = MutableStateFlow(setOf("nutrition", "conditions", "alternatives"))
+    // Expanded sections state - all sections expanded by default
+    private val _expandedSections = MutableStateFlow(setOf("nutrition", "diabetes_advice", "alternatives"))
     val expandedSections: StateFlow<Set<String>> = _expandedSections.asStateFlow()
 
     init {
