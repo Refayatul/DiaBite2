@@ -63,10 +63,15 @@ class FoodDetailViewModel @Inject constructor(
         viewModelScope.launch {
             _isLoading.value = true
             try {
-                // Fetch user data first to determine favorite status
+                // Fetch user data
                 val user = authRepository.getCurrentUser().first()
-                _userConditions.value = user?.primaryConditions?.map { ConditionNormalizer.normalizeCondition(it) } ?: emptyList()
-                _userDiabetesType.value = user?.diabetesType?.let { ConditionNormalizer.normalizeCondition(it) }
+                val diabetesType = user?.diabetesType?.let { ConditionNormalizer.normalizeCondition(it) }
+                _userDiabetesType.value = diabetesType
+                
+                // User conditions derived from diabetes type only
+                _userConditions.value = listOfNotNull(diabetesType)
+
+                // Check favorite status directly from user object
                 _isFavorite.value = user?.favoriteFoodIds?.contains(foodId) == true
 
                 // Then load food details

@@ -70,11 +70,12 @@
 - **VS Code**: Supplementary editing (current setup)
 
 ### Build Configuration
+- **AGP Version**: 8.13.0
 - **Gradle Version**: 9.2.0
 - **Kotlin Version**: 2.2.21
 - **Compose Version**: 2025.11.00 (BOM)
-- **Hilt Version**: 2.51.1
-- **KSP Version**: 2.2.20-2.0.4
+- **Hilt Version**: 2.56.2
+- **KSP Version**: 2.2.21-2.0.4
 
 ### Project Structure
 ```

@@ -9,20 +9,19 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import androidx.navigation.toRoute
-import com.example.diabite.presentation.screen.AISuggestionsUI
-import com.example.diabite.presentation.screen.DiabetesDetailsScreen
-import com.example.diabite.presentation.screen.FoodDetailScreen
 import com.example.diabite.presentation.home_screen.HomeScreen
+import com.example.diabite.presentation.screen.AISuggestionsUI
+import com.example.diabite.presentation.screen.FoodDetailScreen
 import com.example.diabite.presentation.screen.LoginScreen
-import com.example.diabite.presentation.screen.MedicalConditionsScreen
 import com.example.diabite.presentation.screen.RegisterScreen
 import com.example.diabite.presentation.screen.SearchScreen
 import com.example.diabite.presentation.screen.SettingsScreen
@@ -39,9 +38,17 @@ fun NavHostApp(authViewModel: AuthViewModel = hiltViewModel()) {
     val navController = rememberNavController()
     val authState by authViewModel.authState.collectAsState()
 
+    // Derived states to prevent unnecessary navigation on user updates
+    val isAuthenticated by remember(authState) {
+        derivedStateOf { authState is Resource.Success && authState.data != null }
+    }
+    val isUnauthenticated by remember(authState) {
+        derivedStateOf { authState is Resource.Success && authState.data == null }
+    }
+
     // Determine start destination based on auth state
     val startDestination = when {
-        authState is Resource.Success && authState.data != null -> Route.Home
+        isAuthenticated -> Route.Home
         else -> Route.Login // Default to login while checking
     }
 
@@ -56,18 +63,19 @@ fun NavHostApp(authViewModel: AuthViewModel = hiltViewModel()) {
         return
     }
     
-    LaunchedEffect(authState) {
-        if (authState is Resource.Success) {
-            if (authState.data == null) {
-                // When logged out, go to Login and clear backstack
-                navController.navigate(Route.Login) {
-                    popUpTo(0) { inclusive = true }
-                }
-            } else {
-                // When logged in, go to Home and clear backstack
-                navController.navigate(Route.Home) {
-                    popUpTo(Route.Login) { inclusive = true }
-                }
+    // Navigation side effects
+    LaunchedEffect(isAuthenticated) {
+        if (isAuthenticated) {
+            navController.navigate(Route.Home) {
+                popUpTo(Route.Login) { inclusive = true }
+            }
+        }
+    }
+
+    LaunchedEffect(isUnauthenticated) {
+        if (isUnauthenticated) {
+            navController.navigate(Route.Login) {
+                popUpTo(0) { inclusive = true }
             }
         }
     }
@@ -84,21 +92,6 @@ fun NavHostApp(authViewModel: AuthViewModel = hiltViewModel()) {
             RegisterScreen(navController = navController, viewModel = authViewModel)
         }
 
-        // Multi-step Registration Flow
-        composable<Route.MedicalConditions> {
-            MedicalConditionsScreen(
-                navController = navController,
-                authViewModel = authViewModel
-            )
-        }
-
-        composable<Route.DiabetesDetails> {
-            DiabetesDetailsScreen(
-                navController = navController,
-                authViewModel = authViewModel
-            )
-        }
-
         // Main App Screens (Protected Routes)
         composable<Route.Home>() {
             HomeScreen(navController = navController, authViewModel = authViewModel)
@@ -113,8 +106,7 @@ fun NavHostApp(authViewModel: AuthViewModel = hiltViewModel()) {
             )
         }
 
-        composable<Route.FoodDetail>() { backStackEntry ->
-            val foodId = backStackEntry.toRoute<Route.FoodDetail>().foodId
+        composable<Route.FoodDetail>() {
             FoodDetailScreen(navController = navController)
         }
 
@@ -131,8 +123,7 @@ fun NavHostApp(authViewModel: AuthViewModel = hiltViewModel()) {
         }
 
         // Legacy route for backward compatibility
-        composable<Route.Detail>() { backStackEntry ->
-            val (name, email) = backStackEntry.toRoute<Route.Detail>()
+        composable<Route.Detail>() {
             HomeScreen(navController = navController, authViewModel = authViewModel)
         }
     }

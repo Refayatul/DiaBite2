@@ -131,7 +131,7 @@ fun HomeScreen(navController: NavHostController, authViewModel: AuthViewModel = 
         NavHost(navController = bottomNavController, startDestination = BottomNavItem.Home.route, modifier = Modifier.padding(paddingValues)) {
             composable(BottomNavItem.Home.route) {
                 val currentUser by authViewModel.currentUser.collectAsState()
-                HomeScreenUI(name = currentUser?.displayName ?: "User", email = currentUser?.email ?: "", mainNavController = navController)
+                HomeScreenUI(name = currentUser?.name ?: "User", email = currentUser?.email ?: "", mainNavController = navController)
             }
             composable(BottomNavItem.History.route) {
                 HistoryScreenUI(viewModel = userViewModel) { query ->

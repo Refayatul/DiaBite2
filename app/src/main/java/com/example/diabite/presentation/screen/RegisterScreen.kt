@@ -65,31 +65,34 @@ import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.android.gms.common.api.ApiException
 import timber.log.Timber
-import java.text.SimpleDateFormat
-import java.util.Calendar
-import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RegisterScreen(navController: NavController, viewModel: AuthViewModel = hiltViewModel()) {
 
     val registrationState by viewModel.registrationState.collectAsState()
+    val signUpState by viewModel.signUpState.collectAsState()
+    
     var confirmPassword by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
     var confirmPasswordVisible by remember { mutableStateOf(false) }
+    var typeExpanded by remember { mutableStateOf(false) }
 
     // State for validation
     var emailError by remember { mutableStateOf(false) }
     var passwordError by remember { mutableStateOf(false) }
     var confirmPasswordError by remember { mutableStateOf(false) }
     var passwordMatchError by remember { mutableStateOf(false) }
-    var displayNameError by remember { mutableStateOf(false) }
-    var dateOfBirthError by remember { mutableStateOf(false) }
-    var biologicalSexError by remember { mutableStateOf(false) }
+    var nameError by remember { mutableStateOf(false) }
+    var typeError by remember { mutableStateOf(false) }
 
-    var sexExpanded by remember { mutableStateOf(false) }
-
-    val biologicalSexOptions = listOf("Male", "Female", "Other", "Prefer not to say")
+    val diabetesTypes = listOf(
+        "Diabetes Type 1",
+        "Diabetes Type 2",
+        "Prediabetes",
+        "Gestational Diabetes",
+        "Other"
+    )
 
     val context = LocalContext.current
     val googleSignInState by viewModel.googleSignInState.collectAsState()
@@ -125,12 +128,20 @@ fun RegisterScreen(navController: NavController, viewModel: AuthViewModel = hilt
         when (googleSignInState) {
             is Resource.Success<*> -> {
                 isGoogleSignInLoading = false
+                // Google Sign in successful, navigation handled by NavHost based on AuthState
             }
             is Resource.Error<*> -> {
                 isGoogleSignInLoading = false
                 viewModel.resetAuthState()
             }
             else -> {}
+        }
+    }
+
+    // Handle Email sign-up state
+    LaunchedEffect(signUpState) {
+        if (signUpState is Resource.Success) {
+             // Auth state update will trigger navigation in NavHost
         }
     }
 
@@ -175,8 +186,24 @@ fun RegisterScreen(navController: NavController, viewModel: AuthViewModel = hilt
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
-                Spacer(modifier = Modifier.height(32.dp))
+                Spacer(modifier = Modifier.height(24.dp))
 
+                // Name Input
+                OutlinedTextField(
+                    value = registrationState.name,
+                    onValueChange = { viewModel.updateRegistrationState(registrationState.copy(name = it)); nameError = false },
+                    label = { Text("Full Name") },
+                    placeholder = { Text("Enter your full name") },
+                    modifier = Modifier.fillMaxWidth(),
+                    leadingIcon = { Icon(Icons.Default.Person, contentDescription = "Name Icon") },
+                    singleLine = true,
+                    isError = nameError,
+                    supportingText = { if (nameError) Text("Name is required") }
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Email Input
                 OutlinedTextField(
                     value = registrationState.email,
                     onValueChange = { viewModel.updateRegistrationState(registrationState.copy(email = it)); emailError = false },
@@ -190,13 +217,14 @@ fun RegisterScreen(navController: NavController, viewModel: AuthViewModel = hilt
                     supportingText = { if (emailError) Text("Valid email is required") }
                 )
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(8.dp))
 
+                // Password Input
                 OutlinedTextField(
                     value = registrationState.password,
                     onValueChange = { viewModel.updateRegistrationState(registrationState.copy(password = it)); passwordError = false; passwordMatchError = false },
                     label = { Text("Password") },
-                    placeholder = { Text("Create a password (min 6 characters)") },
+                    placeholder = { Text("Min 6 characters") },
                     modifier = Modifier.fillMaxWidth(),
                     leadingIcon = { Icon(Icons.Default.Lock, contentDescription = "Password Icon") },
                     trailingIcon = {
@@ -217,8 +245,9 @@ fun RegisterScreen(navController: NavController, viewModel: AuthViewModel = hilt
                     }
                 )
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(8.dp))
 
+                // Confirm Password Input
                 OutlinedTextField(
                     value = confirmPassword,
                     onValueChange = { confirmPassword = it; confirmPasswordError = false; passwordMatchError = false },
@@ -241,132 +270,36 @@ fun RegisterScreen(navController: NavController, viewModel: AuthViewModel = hilt
                     supportingText = { if (confirmPasswordError) Text("Confirmation is required") }
                 )
 
-                Spacer(modifier = Modifier.height(24.dp))
-
-                OutlinedTextField(
-                    value = registrationState.displayName,
-                    onValueChange = { viewModel.updateRegistrationState(registrationState.copy(displayName = it)); displayNameError = false },
-                    label = { Text("Full Name") },
-                    placeholder = { Text("Enter your full name") },
-                    modifier = Modifier.fillMaxWidth(),
-                    leadingIcon = { Icon(Icons.Default.Person, contentDescription = "Name Icon") },
-                    singleLine = true,
-                    isError = displayNameError,
-                    supportingText = { if (displayNameError) Text("Name is required") }
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                Text(
-                    "Date of Birth",
-                    style = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier.fillMaxWidth(),
-                    textAlign = TextAlign.Start
-                )
-
                 Spacer(modifier = Modifier.height(8.dp))
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    OutlinedTextField(
-                        value = registrationState.dateOfBirth.split("/").getOrElse(1) { "" },
-                        onValueChange = {
-                            if (it.length <= 2 && it.all { char -> char.isDigit() }) {
-                                val parts = registrationState.dateOfBirth.split("/").toMutableList()
-                                while (parts.size < 3) parts.add("")
-                                parts[1] = it
-                                viewModel.updateRegistrationState(registrationState.copy(dateOfBirth = parts.joinToString("/")))
-                                dateOfBirthError = false
-                            }
-                        },
-                        label = { Text("Day") },
-                        placeholder = { Text("DD") },
-                        modifier = Modifier.weight(1f),
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        textStyle = androidx.compose.ui.text.TextStyle(textAlign = TextAlign.Center)
-                    )
-
-                    OutlinedTextField(
-                        value = registrationState.dateOfBirth.split("/").getOrElse(0) { "" },
-                        onValueChange = {
-                            if (it.length <= 2 && it.all { char -> char.isDigit() }) {
-                                val parts = registrationState.dateOfBirth.split("/").toMutableList()
-                                while (parts.size < 3) parts.add("")
-                                parts[0] = it
-                                viewModel.updateRegistrationState(registrationState.copy(dateOfBirth = parts.joinToString("/")))
-                                dateOfBirthError = false
-                            }
-                        },
-                        label = { Text("Month") },
-                        placeholder = { Text("MM") },
-                        modifier = Modifier.weight(1f),
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        textStyle = androidx.compose.ui.text.TextStyle(textAlign = TextAlign.Center)
-                    )
-
-                    OutlinedTextField(
-                        value = registrationState.dateOfBirth.split("/").getOrElse(2) { "" },
-                        onValueChange = {
-                            if (it.length <= 4 && it.all { char -> char.isDigit() }) {
-                                val parts = registrationState.dateOfBirth.split("/").toMutableList()
-                                while (parts.size < 3) parts.add("")
-                                parts[2] = it
-                                viewModel.updateRegistrationState(registrationState.copy(dateOfBirth = parts.joinToString("/")))
-                                dateOfBirthError = false
-                            }
-                        },
-                        label = { Text("Year") },
-                        placeholder = { Text("YYYY") },
-                        modifier = Modifier.weight(1.5f),
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        textStyle = androidx.compose.ui.text.TextStyle(textAlign = TextAlign.Center)
-                    )
-                }
-
-                if (dateOfBirthError) {
-                    Text(
-                        "Please enter a valid date of birth",
-                        color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier.fillMaxWidth(),
-                        textAlign = TextAlign.Start
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
+                // Diabetes Type Selection
                 ExposedDropdownMenuBox(
-                    expanded = sexExpanded,
-                    onExpandedChange = { sexExpanded = !sexExpanded }
+                    expanded = typeExpanded,
+                    onExpandedChange = { typeExpanded = !typeExpanded }
                 ) {
                     OutlinedTextField(
-                        value = registrationState.biologicalSex,
+                        value = registrationState.diabetesType,
                         onValueChange = {},
                         readOnly = true,
-                        label = { Text("Biological Sex") },
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = sexExpanded) },
+                        label = { Text("Diabetes Type") },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = typeExpanded) },
                         modifier = Modifier
                             .fillMaxWidth()
                             .menuAnchor(),
-                        isError = biologicalSexError,
-                        supportingText = { if (biologicalSexError) Text("Please select your biological sex") }
+                        isError = typeError,
+                        supportingText = { if (typeError) Text("Please select your diabetes type") }
                     )
                     ExposedDropdownMenu(
-                        expanded = sexExpanded,
-                        onDismissRequest = { sexExpanded = false }
+                        expanded = typeExpanded,
+                        onDismissRequest = { typeExpanded = false }
                     ) {
-                        biologicalSexOptions.forEach { option ->
+                        diabetesTypes.forEach { option ->
                             DropdownMenuItem(
                                 text = { Text(option) },
                                 onClick = {
-                                    viewModel.updateRegistrationState(registrationState.copy(biologicalSex = option))
-                                    sexExpanded = false
-                                    biologicalSexError = false
+                                    viewModel.updateRegistrationState(registrationState.copy(diabetesType = option))
+                                    typeExpanded = false
+                                    typeError = false
                                 }
                             )
                         }
@@ -381,33 +314,43 @@ fun RegisterScreen(navController: NavController, viewModel: AuthViewModel = hilt
                         passwordError = registrationState.password.length < 6
                         confirmPasswordError = confirmPassword.isEmpty()
                         passwordMatchError = registrationState.password != confirmPassword
-                        displayNameError = registrationState.displayName.isEmpty()
+                        nameError = registrationState.name.isEmpty()
+                        typeError = registrationState.diabetesType.isEmpty()
 
-                        val dobParts = registrationState.dateOfBirth.split("/")
-                        val day = dobParts.getOrNull(1)?.toIntOrNull()
-                        val month = dobParts.getOrNull(0)?.toIntOrNull()
-                        val year = dobParts.getOrNull(2)?.toIntOrNull()
-
-                        dateOfBirthError = registrationState.dateOfBirth.isEmpty() || day == null || month == null || year == null ||
-                                day !in 1..31 || month !in 1..12 || year < 1900 || year > Calendar.getInstance().get(Calendar.YEAR) ||
-                                !isValidDateComponents(day, month, year)
-
-                        biologicalSexError = registrationState.biologicalSex.isEmpty()
-
-                        if (!emailError && !passwordError && !confirmPasswordError && !passwordMatchError &&
-                            !displayNameError && !dateOfBirthError && !biologicalSexError) {
-                            val dateOfBirth = String.format(Locale.getDefault(), "%02d/%02d/%04d", month, day, year)
-                            viewModel.updateRegistrationState(registrationState.copy(dateOfBirth = dateOfBirth))
-
-                            navController.navigate(Route.MedicalConditions)
+                        if (!emailError && !passwordError && !confirmPasswordError && !passwordMatchError && !nameError && !typeError) {
+                            viewModel.signUp(
+                                email = registrationState.email,
+                                password = registrationState.password,
+                                name = registrationState.name,
+                                diabetesType = registrationState.diabetesType
+                            )
                         }
                     },
-                    modifier = Modifier.fillMaxWidth().height(48.dp)
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                    enabled = signUpState !is Resource.Loading
                 ) {
-                    Text("Continue to Medical Conditions")
+                    if (signUpState is Resource.Loading) {
+                        androidx.compose.material3.CircularProgressIndicator(
+                            modifier = Modifier.size(24.dp),
+                            color = MaterialTheme.colorScheme.onPrimary
+                        )
+                    } else {
+                        Text("Create Account")
+                    }
+                }
+
+                if (signUpState is Resource.Error) {
+                    Text(
+                        text = (signUpState as Resource.Error).error?.userMessage ?: "Sign up failed",
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(top = 8.dp)
+                    )
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
+                
+                // Google Sign In Button
                 Button(
                     onClick = {
                         isGoogleSignInLoading = true
@@ -476,29 +419,5 @@ fun RegisterScreen(navController: NavController, viewModel: AuthViewModel = hilt
                 }
             }
         }
-    }
-}
-
-private fun isValidDate(dateString: String): Boolean {
-    return try {
-        val format = SimpleDateFormat("MM/dd/yyyy", Locale.getDefault())
-        format.isLenient = false
-        format.parse(dateString)
-        true
-    } catch (e: Exception) {
-        false
-    }
-}
-
-private fun isValidDateComponents(day: Int, month: Int, year: Int): Boolean {
-    return try {
-        val calendar = Calendar.getInstance()
-        calendar.setLenient(false)
-        calendar.set(year, month - 1, day) // Month is 0-based in Calendar
-        calendar.get(Calendar.YEAR) == year &&
-        calendar.get(Calendar.MONTH) == month - 1 &&
-        calendar.get(Calendar.DAY_OF_MONTH) == day
-    } catch (e: Exception) {
-        false
     }
 }

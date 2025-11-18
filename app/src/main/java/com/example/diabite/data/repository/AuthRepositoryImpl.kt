@@ -33,11 +33,9 @@ class AuthRepositoryImpl @Inject constructor(
             if (firebaseUser != null) {
                 val newUser = user.copy(
                     uid = firebaseUser.uid,
-                    email = email,
-                    createdAt = System.currentTimeMillis(),
-                    lastLoginAt = System.currentTimeMillis()
+                    email = email
                 )
-                // Save user profile to Firestore
+                // Save user to Firestore
                 firestore.collection("users").document(firebaseUser.uid).set(newUser).await()
                 emit(Resource.success(newUser))
             } else {
@@ -56,34 +54,21 @@ class AuthRepositoryImpl @Inject constructor(
             val result = firebaseAuth.signInWithEmailAndPassword(email, password).await()
             val firebaseUser = result.user
             if (firebaseUser != null) {
-                // Get user profile from Firestore
                 val userDocRef = firestore.collection("users").document(firebaseUser.uid)
                 val userDoc = userDocRef.get().await()
 
                 val user = if (userDoc.exists()) {
-                    userDoc.toObject(User::class.java)?.copy(
-                        lastLoginAt = System.currentTimeMillis()
-                    ) ?: run {
-                        // Document exists but mapping failed, return default user without overwriting
-                        Timber.w("Failed to map user profile during login. Returning basic user.")
-                        createDefaultUser(firebaseUser)
-                    }
+                    userDoc.toObject(User::class.java) ?: createDefaultUser(firebaseUser)
                 } else {
-                    // Document does not exist, create a new User and save it
                     val newUser = User(
                         uid = firebaseUser.uid,
                         email = firebaseUser.email ?: "",
-                        displayName = firebaseUser.displayName ?: "",
-                        createdAt = System.currentTimeMillis(),
-                        lastLoginAt = System.currentTimeMillis()
+                        name = firebaseUser.displayName ?: "",
+                        diabetesType = ""
                     )
                     userDocRef.set(newUser).await()
                     newUser
                 }
-
-                // Update last login (if it was an existing user)
-                userDocRef.update("lastLoginAt", System.currentTimeMillis()).await()
-
                 emit(Resource.success(user))
             } else {
                 emit(Resource.error(AppError.AuthenticationError("Login failed")))
@@ -102,34 +87,21 @@ class AuthRepositoryImpl @Inject constructor(
             val result = firebaseAuth.signInWithCredential(credential).await()
             val firebaseUser = result.user
             if (firebaseUser != null) {
-                // Check if user profile exists
                 val userDocRef = firestore.collection("users").document(firebaseUser.uid)
                 val userDoc = userDocRef.get().await()
 
                 val user = if (userDoc.exists()) {
-                    userDoc.toObject(User::class.java)?.copy(
-                        lastLoginAt = System.currentTimeMillis()
-                    ) ?: run {
-                        // Document exists but mapping failed, return default user without overwriting
-                        Timber.w("Failed to map user profile during Google sign-in. Returning basic user.")
-                        createDefaultUser(firebaseUser)
-                    }
+                    userDoc.toObject(User::class.java) ?: createDefaultUser(firebaseUser)
                 } else {
-                    // Document does not exist, create a new User profile for Google sign-in and save it
                     val newUser = User(
                         uid = firebaseUser.uid,
                         email = firebaseUser.email ?: "",
-                        displayName = firebaseUser.displayName ?: "",
-                        createdAt = System.currentTimeMillis(),
-                        lastLoginAt = System.currentTimeMillis()
+                        name = firebaseUser.displayName ?: "",
+                        diabetesType = ""
                     )
                     userDocRef.set(newUser).await()
                     newUser
                 }
-
-                // Update last login
-                userDocRef.update("lastLoginAt", System.currentTimeMillis()).await()
-
                 emit(Resource.success(user))
             } else {
                 emit(Resource.error(AppError.AuthenticationError("Google sign-in failed")))
@@ -144,11 +116,8 @@ class AuthRepositoryImpl @Inject constructor(
         emit(Resource.loading())
 
         try {
-            // Sign out from Firebase Auth
             firebaseAuth.signOut()
-            // Sign out from Google Sign-In to force account selection on next login
             googleSignInClient.signOut().await()
-            // Clear local Firestore cache
             firestore.clearPersistence().await()
             emit(Resource.success(Unit))
         } catch (e: Exception) {
@@ -170,7 +139,6 @@ class AuthRepositoryImpl @Inject constructor(
         val listener = userDocRef.addSnapshotListener { snapshot, error ->
             if (error != null) {
                 Timber.w(error, "Listen for user profile failed.")
-                // Don't close the flow, just emit a basic user and let it recover
                 trySend(createDefaultUser(firebaseUser))
                 return@addSnapshotListener
             }
@@ -179,18 +147,17 @@ class AuthRepositoryImpl @Inject constructor(
                 val user = snapshot.toObject(User::class.java) ?: createDefaultUser(firebaseUser)
                 trySend(user)
             } else {
-                // Document doesn't exist, create it for the first time
                 val newUser = createDefaultUser(firebaseUser)
                 userDocRef.set(newUser).addOnSuccessListener {
-                    trySend(newUser) // Emit the new user after creation
+                    trySend(newUser)
                 }.addOnFailureListener {
                     Timber.w(it, "Failed to create user document for the first time.")
-                    trySend(newUser) // Still send a user object on failure
+                    trySend(newUser)
                 }
             }
         }
 
-        awaitClose { listener.remove() } // Unregister listener when flow is cancelled
+        awaitClose { listener.remove() }
     }
 
     override fun updateUserProfile(user: User): Flow<Resource<User>> = flow {
@@ -201,18 +168,6 @@ class AuthRepositoryImpl @Inject constructor(
             emit(Resource.success(user))
         } catch (e: Exception) {
             Timber.e(e, "Profile update failed")
-            emit(Resource.firebaseError(e))
-        }
-    }
-
-    override fun saveUserProfile(userProfile: com.example.diabite.data.model.UserProfile): Flow<Resource<Unit>> = flow {
-        emit(Resource.loading())
-
-        try {
-            firestore.collection("userProfiles").document(userProfile.uid).set(userProfile).await()
-            emit(Resource.success(Unit))
-        } catch (e: Exception) {
-            Timber.e(e, "UserProfile save failed")
             emit(Resource.firebaseError(e))
         }
     }
@@ -237,9 +192,11 @@ class AuthRepositoryImpl @Inject constructor(
                 emit(Resource.error(AppError.AuthenticationError("User not logged in")))
                 return@flow
             }
+            
             firestore.collection("users").document(uid)
                 .update("favoriteFoodIds", FieldValue.arrayUnion(foodId))
                 .await()
+                
             emit(Resource.success(Unit))
         } catch (e: Exception) {
             Timber.e(e, "Failed to add favorite food")
@@ -270,23 +227,20 @@ class AuthRepositoryImpl @Inject constructor(
         try {
             val uid = firebaseAuth.currentUser?.uid
             if (uid == null) {
-                // Silently succeed if user is not logged in
                 emit(Resource.success(Unit))
                 return@flow
             }
+            
             val userDocRef = firestore.collection("users").document(uid)
-
-            // To keep history clean and ordered by most recent, we remove and then add.
+            
+            // Remove if exists then add to front
             userDocRef.update("searchHistory", FieldValue.arrayRemove(query)).await()
             userDocRef.update("searchHistory", FieldValue.arrayUnion(query)).await()
-
-            // Optional: Trim the history to a certain size
-            // This would require a transaction to be safe. For now, we'll let it grow.
-
+            
             emit(Resource.success(Unit))
         } catch (e: Exception) {
-            Timber.w(e, "Failed to add search to history (non-critical)")
-            emit(Resource.success(Unit)) // Don't block user for this
+            Timber.w(e, "Failed to add search to history")
+            emit(Resource.success(Unit))
         }
     }
 
@@ -294,9 +248,8 @@ class AuthRepositoryImpl @Inject constructor(
         return User(
             uid = firebaseUser.uid,
             email = firebaseUser.email ?: "",
-            displayName = firebaseUser.displayName ?: "",
-            createdAt = System.currentTimeMillis(),
-            lastLoginAt = System.currentTimeMillis()
+            name = firebaseUser.displayName ?: "",
+            diabetesType = ""
         )
     }
 }

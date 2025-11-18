@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.diabite.data.local.CacheManager
 import com.example.diabite.data.model.FoodItem
+import com.example.diabite.data.model.User
 import com.example.diabite.domain.repository.AuthRepository
 import com.example.diabite.domain.repository.FoodRepository
 import com.example.diabite.util.FoodNormalizer
@@ -55,6 +56,13 @@ class SearchViewModel @Inject constructor(
     private val _isEmptyState = MutableStateFlow(true)
     val isEmptyState: StateFlow<Boolean> = _isEmptyState.asStateFlow()
 
+    // State to track if user needs to select a diabetes type
+    private val _isDiabetesTypeMissing = MutableStateFlow(false)
+    val isDiabetesTypeMissing: StateFlow<Boolean> = _isDiabetesTypeMissing.asStateFlow()
+    
+    // Current user object to update
+    private var currentUser: User? = null
+
     init {
         val initialQuery = savedStateHandle.get<String>("query") ?: ""
         _searchQuery.value = initialQuery
@@ -68,9 +76,14 @@ class SearchViewModel @Inject constructor(
             authRepository.getCurrentUser()
                 .catch { e -> _error.value = "Failed to load user profile." }
                 .collect { user ->
-                    _userConditions.value = user?.primaryConditions ?: emptyList()
-                    _userDiabetesType.value = user?.diabetesType ?: ""
+                    currentUser = user
+                    val diabetesType = user?.diabetesType ?: ""
+                    _userDiabetesType.value = diabetesType
+                    _userConditions.value = if (diabetesType.isNotEmpty()) listOf(diabetesType) else emptyList()
                     _searchHistory.value = user?.searchHistory?.reversed() ?: emptyList()
+                    
+                    // Check if diabetes type is missing
+                    _isDiabetesTypeMissing.value = user != null && diabetesType.isBlank()
                 }
         }
     }
@@ -80,6 +93,19 @@ class SearchViewModel @Inject constructor(
         if (query.isBlank()) {
             _searchResults.value = emptyList()
             _isEmptyState.value = true
+        }
+    }
+
+    fun updateUserDiabetesType(type: String) {
+        viewModelScope.launch {
+            currentUser?.let { user ->
+                val updatedUser = user.copy(diabetesType = type)
+                authRepository.updateUserProfile(updatedUser).collect { result ->
+                    if (result is Resource.Error) {
+                        _error.value = "Failed to update profile: ${result.error?.userMessage}"
+                    }
+                }
+            }
         }
     }
 
@@ -129,7 +155,8 @@ class SearchViewModel @Inject constructor(
 
     fun clearSearchHistory() {
         viewModelScope.launch {
-            // You would expand this to clear history in Firestore
+            // To be implemented: Delete history from Firestore subcollection
+            // For now, just clear local state
             _searchHistory.value = emptyList()
         }
     }

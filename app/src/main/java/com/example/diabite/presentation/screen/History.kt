@@ -32,9 +32,7 @@ fun HistoryScreenUI(
     viewModel: UserViewModel = hiltViewModel(),
     onSearchQueryClick: (String) -> Unit // Renamed for clarity
 ) {
-    val user by viewModel.user.collectAsState()
-    // The history is now reversed directly in the viewmodel, but we can do it here too for safety
-    val searchHistory = user?.searchHistory?.reversed() ?: emptyList()
+    val searchHistory by viewModel.searchHistory.collectAsState()
 
     Column(
         modifier = Modifier

@@ -18,7 +18,7 @@ import javax.inject.Inject
 data class RegistrationState(
     val email: String = "",
     val password: String = "",
-    val displayName: String = "",
+    val name: String = "", // Renamed from displayName
     val dateOfBirth: String = "",
     val biologicalSex: String = "",
     val primaryConditions: List<String> = emptyList(),
@@ -83,13 +83,11 @@ class AuthViewModel @Inject constructor(
         }
     }
 
+    // Simplified signUp method matching new schema
     fun signUp(
         email: String,
         password: String,
-        displayName: String,
-        dateOfBirth: String = "",
-        biologicalSex: String = "",
-        primaryConditions: List<String> = emptyList(),
+        name: String, // Renamed from displayName
         diabetesType: String = ""
     ) {
         // Validate input
@@ -102,20 +100,18 @@ class AuthViewModel @Inject constructor(
                 _signUpState.value = Resource.error(AppError.InvalidPasswordError())
                 return
             }
-            displayName.isBlank() -> {
-                _signUpState.value = Resource.error(AppError.MissingFieldError("displayName"))
+            name.isBlank() -> {
+                _signUpState.value = Resource.error(AppError.MissingFieldError("name"))
                 return
             }
         }
 
         _signUpState.value = Resource.loading()
 
-        // Create User object for authentication
+        // Create User object with only required fields
         val user = User(
-            displayName = displayName,
-            dateOfBirth = dateOfBirth,
-            biologicalSex = biologicalSex,
-            primaryConditions = primaryConditions,
+            email = email,
+            name = name,
             diabetesType = diabetesType
         )
 
@@ -144,105 +140,19 @@ class AuthViewModel @Inject constructor(
         }
     }
 
+    // Unified signUpWithProfile to act as main sign up entry point using RegistrationState
     fun signUpWithProfile(
         email: String,
         password: String,
-        displayName: String,
-        dateOfBirth: String = "",
-        biologicalSex: String = "",
-        primaryConditions: List<String> = emptyList(),
+        name: String, // Renamed
+        dateOfBirth: String = "", // Kept for signature compatibility but not used
+        biologicalSex: String = "", // Kept for signature compatibility but not used
+        primaryConditions: List<String> = emptyList(), // Kept for signature compatibility but not used
         diabetesType: String = "",
-        diabetesMedications: List<String> = emptyList()
+        diabetesMedications: List<String> = emptyList() // Kept for signature compatibility but not used
     ) {
-        // Validate input
-        when {
-            email.isBlank() -> {
-                _signUpState.value = Resource.error(AppError.InvalidEmailError())
-                return
-            }
-            password.length < 6 -> {
-                _signUpState.value = Resource.error(AppError.InvalidPasswordError())
-                return
-            }
-            displayName.isBlank() -> {
-                _signUpState.value = Resource.error(AppError.MissingFieldError("displayName"))
-                return
-            }
-        }
-
-        _signUpState.value = Resource.loading()
-
-        // Create User object for authentication (legacy compatibility)
-        val user = User(
-            displayName = displayName,
-            dateOfBirth = dateOfBirth,
-            biologicalSex = biologicalSex,
-            primaryConditions = primaryConditions,
-            diabetesType = diabetesType
-        )
-
-        viewModelScope.launch {
-            try {
-                authRepository.signUp(email, password, user).collect { resource ->
-                    when (resource) {
-                        is Resource.Success -> {
-                            val signedUpUser = resource.data
-                            if (signedUpUser != null) {
-                                // Create and save UserProfile to Firestore
-                                val userProfile = com.example.diabite.data.model.UserProfile(
-                                    uid = signedUpUser.uid,
-                                    email = email,
-                                    displayName = displayName,
-                                    dateOfBirth = try {
-                                        java.text.SimpleDateFormat("MM/dd/yyyy", java.util.Locale.getDefault())
-                                            .parse(dateOfBirth)
-                                    } catch (e: Exception) {
-                                        Timber.w(e, "Failed to parse date of birth")
-                                        null
-                                    },
-                                    biologicalSex = biologicalSex,
-                                    primaryConditions = primaryConditions,
-                                    diabetesType = if (diabetesType.isNotEmpty()) diabetesType else null,
-                                    diabetesMedications = if (diabetesMedications.isNotEmpty()) diabetesMedications else emptyList()
-                                )
-
-                                // Save UserProfile to Firestore
-                                authRepository.saveUserProfile(userProfile).collect { profileResource ->
-                                    when (profileResource) {
-                                        is Resource.Success -> {
-                                            Timber.d("UserProfile saved successfully")
-                                            _currentUser.value = signedUpUser
-                                            _signUpState.value = Resource.success(signedUpUser)
-                                        }
-                                        is Resource.Error -> {
-                                            // Profile save failed, but user was created
-                                            Timber.w(profileResource.error?.cause, "UserProfile save failed, but user was created")
-                                            _currentUser.value = signedUpUser
-                                            _signUpState.value = Resource.success(signedUpUser)
-                                        }
-                                        is Resource.Loading -> {
-                                            // Keep loading state
-                                        }
-                                    }
-                                }
-                            } else {
-                                _signUpState.value = Resource.error(AppError.UnknownError("User creation failed"))
-                            }
-                        }
-                        is Resource.Error -> {
-                            Timber.e(resource.error?.cause, "Sign up failed")
-                            _signUpState.value = Resource.error(resource.error!!, resource.data)
-                        }
-                        is Resource.Loading -> {
-                            _signUpState.value = Resource.loading()
-                        }
-                    }
-                }
-            } catch (e: Exception) {
-                Timber.e(e, "Sign up error")
-                _signUpState.value = Resource.firebaseError(e)
-            }
-        }
+        // Forward to the simplified signUp
+        signUp(email, password, name, diabetesType)
     }
 
     fun login(email: String, password: String) {

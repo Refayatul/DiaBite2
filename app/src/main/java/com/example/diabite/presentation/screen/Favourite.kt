@@ -34,8 +34,7 @@ fun FavouriteScreenUI(
     viewModel: UserViewModel = hiltViewModel(),
     onFavoriteItemClick: (String) -> Unit
 ) {
-    val user by viewModel.user.collectAsState()
-    val favoriteFoodIds = user?.favoriteFoodIds ?: emptyList()
+    val favoriteFoodIds by viewModel.favoriteFoodIds.collectAsState()
 
     Column(
         modifier = Modifier

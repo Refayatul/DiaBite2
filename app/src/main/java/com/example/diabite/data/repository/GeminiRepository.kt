@@ -3,12 +3,9 @@ package com.example.diabite.data.repository
 import com.example.diabite.data.model.Alternative
 import com.example.diabite.data.model.ConditionRecommendation
 import com.example.diabite.data.model.FoodItem
-import com.example.diabite.data.model.FoodLink
 import com.example.diabite.data.model.NutritionalBenefit
 import com.example.diabite.data.model.PotentialConcern
 import com.example.diabite.data.model.PreparationTip
-import com.example.diabite.data.model.Serving
-import com.example.diabite.data.model.Timing
 import com.example.diabite.util.AppError
 import com.example.diabite.util.Resource
 import com.google.firebase.functions.FirebaseFunctions
@@ -83,30 +80,42 @@ class GeminiRepository(
                 name = data["name"] as? String ?: return null,
                 normalizedName = data["normalizedName"] as? String ?: "",
                 category = data["category"] as? String ?: "Unknown",
+                subcategory = data["subcategory"] as? String ?: "",
+                servingSize = data["servingSize"] as? String ?: "",
+                householdMeasure = data["householdMeasure"] as? String ?: "",
                 calories = (data["calories"] as? Number)?.toInt() ?: 0,
-                carbs = (data["totalCarbohydrates"] as? Number)?.toDouble() ?: 0.0,
+                totalCarbohydrates = (data["totalCarbohydrates"] as? Number)?.toDouble() ?: 0.0,
+                netCarbs = (data["netCarbs"] as? Number)?.toDouble() ?: 0.0,
                 fiber = (data["fiber"] as? Number)?.toDouble() ?: 0.0,
                 sugars = (data["sugars"] as? Number)?.toDouble() ?: 0.0,
+                addedSugars = (data["addedSugars"] as? Number)?.toDouble() ?: 0.0,
                 protein = (data["protein"] as? Number)?.toDouble() ?: 0.0,
                 totalFat = (data["totalFat"] as? Number)?.toDouble() ?: 0.0,
                 saturatedFat = (data["saturatedFat"] as? Number)?.toDouble() ?: 0.0,
+                transFat = (data["transFat"] as? Number)?.toDouble() ?: 0.0,
+                cholesterol = (data["cholesterol"] as? Number)?.toDouble() ?: 0.0,
                 sodium = (data["sodium"] as? Number)?.toDouble() ?: 0.0,
                 potassium = (data["potassium"] as? Number)?.toDouble() ?: 0.0,
-                glycemicIndex = (data["glycemicIndex"] as? Number)?.toInt(),
-                glycemicLoad = (data["glycemicLoad"] as? Number)?.toDouble(),
-                recommendations = parseRecommendations(data["recommendations"] as? Map<*, *>),
-                primaryAlternatives = parseAlternatives(data["primaryAlternatives"] as? List<*>),
-                alternativeReasoning = data["alternativeReasoning"] as? String ?: "",
+                calcium = (data["calcium"] as? Number)?.toDouble() ?: 0.0,
+                iron = (data["iron"] as? Number)?.toDouble() ?: 0.0,
+                magnesium = (data["magnesium"] as? Number)?.toDouble() ?: 0.0,
+                glycemicIndex = (data["glycemicIndex"] as? Number)?.toInt() ?: 0,
+                glycemicLoad = (data["glycemicLoad"] as? Number)?.toDouble() ?: 0.0,
+                omega3 = (data["omega3"] as? Number)?.toDouble() ?: 0.0,
+                omega6 = (data["omega6"] as? Number)?.toDouble() ?: 0.0,
+                antioxidantLevel = data["antioxidantLevel"] as? String ?: "",
+                inflammatoryIndex = data["inflammatoryIndex"] as? String ?: "",
                 glycemicImpact = data["glycemicImpact"] as? String ?: "Unknown",
                 nutritionalDensity = data["nutritionalDensity"] as? String ?: "Medium",
-                householdMeasure = data["householdMeasure"] as? String,
-                netCarbs = (data["netCarbs"] as? Number)?.toDouble(),
-                nutritionalBenefits = parseNutritionalBenefits(data["nutritionalBenefits"] as? List<*>),
-                potentialConcerns = parsePotentialConcerns(data["potentialConcerns"] as? List<*>),
-                preparationTips = parsePreparationTips(data["preparationTips"] as? List<*>),
-                inflammatoryIndex = data["inflammatoryIndex"] as? String,
-                dataSource = data["dataSource"] as? String,
-                confidenceScore = (data["confidenceScore"] as? Number)?.toDouble()
+                recommendations = parseRecommendations(data["recommendations"] as? Map<*, *>),
+                dataSource = data["dataSource"] as? String ?: "",
+                lastVerified = data["lastVerified"] as? String ?: "",
+                confidenceScore = (data["confidenceScore"] as? Number)?.toDouble() ?: 0.0,
+                searchCount = (data["searchCount"] as? Number)?.toInt() ?: 0,
+                addedBy = data["addedBy"] as? String ?: "",
+                createdAt = data["createdAt"] as? String ?: "",
+                lastUpdated = data["lastUpdated"] as? String ?: "",
+                diabetesTypes = (data["diabetesTypes"] as? List<*>)?.filterIsInstance<String>() ?: emptyList()
             )
         } catch (e: Exception) {
             null
@@ -128,39 +137,23 @@ class GeminiRepository(
      */
     private fun parseConditionRecommendation(data: Map<*, *>) =
         ConditionRecommendation(
-            status = data["status"] as? String ?: "",
+            condition = data["condition"] as? String ?: "",
+            safetyLevel = data["safetyLevel"] as? String ?: "",
             reasoning = data["reasoning"] as? String ?: "",
-            serving = (data["serving"] as? Map<*, *>)?.let { parseServing(it) },
-            timing = (data["timing"] as? Map<*, *>)?.let { parseTiming(it) },
-            pairing = (data["pairing"] as? List<*>)?.let { parseFoodLinkList(it) } ?: emptyList(),
-            alternatives = (data["alternatives"] as? List<*>)?.let { parseFoodLinkList(it) } ?: emptyList(),
-            warnings = (data["warnings"] as? List<*>)?.filterIsInstance<String>() ?: emptyList()
+            keyPoints = (data["keyPoints"] as? List<*>)?.filterIsInstance<String>() ?: emptyList(),
+            servingAdvice = data["servingAdvice"] as? String ?: "",
+            timingAdvice = data["timingAdvice"] as? String ?: "",
+            pairingSuggestions = (data["pairingSuggestions"] as? List<*>)?.filterIsInstance<String>() ?: emptyList(),
+            alternatives = (data["alternatives"] as? List<*>)?.let { parseAlternatives(it) } ?: emptyList(),
+            bloodSugarImpact = data["bloodSugarImpact"] as? String ?: "",
+            bloodPressureImpact = data["bloodPressureImpact"] as? String ?: "",
+            heartHealthImpact = data["heartHealthImpact"] as? String ?: "",
+            kidneyImpact = data["kidneyImpact"] as? String ?: "",
+            alternativeReasoning = data["alternativeReasoning"] as? String ?: "",
+            nutritionalBenefits = parseNutritionalBenefits(data["nutritionalBenefits"] as? List<*>),
+            potentialConcerns = parsePotentialConcerns(data["potentialConcerns"] as? List<*>),
+            preparationTips = parsePreparationTips(data["preparationTips"] as? List<*>)
         )
-
-    private fun parseServing(data: Map<*, *>): Serving {
-        return Serving(
-            standard = data["standard"] as? String ?: "",
-            adjusted = data["adjusted"] as? String
-        )
-    }
-
-    private fun parseTiming(data: Map<*, *>): Timing {
-        return Timing(
-            bestTime = data["bestTime"] as? String,
-            avoidWhen = data["avoidWhen"] as? String
-        )
-    }
-
-    private fun parseFoodLinkList(data: List<*>): List<FoodLink> {
-        return data.mapNotNull { item ->
-            if (item is Map<*, *>) {
-                FoodLink(
-                    foodId = item["foodId"] as? String ?: "",
-                    reason = item["reason"] as? String ?: ""
-                )
-            } else null
-        }
-    }
 
     private fun parseNutritionalBenefits(benefits: List<*>?): List<NutritionalBenefit> {
         return benefits?.mapNotNull { item ->

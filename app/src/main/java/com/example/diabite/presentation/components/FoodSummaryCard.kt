@@ -1,10 +1,6 @@
 package com.example.diabite.presentation.components
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,20 +14,13 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ExpandLess
-import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -45,11 +34,9 @@ fun FoodSummaryCard(
     safetyRating: String,
     primaryConcern: String?,
     servingAdvice: String?,
-    onAlternativeClick: (String) -> Unit,
+    onAlternativeClick: (String) -> Unit, // Kept for compatibility but unused in this version
     modifier: Modifier = Modifier
 ) {
-    var alternativesExpanded by remember { mutableStateOf(false) }
-
     Card(
         modifier = modifier.fillMaxWidth(),
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
@@ -105,7 +92,7 @@ fun FoodSummaryCard(
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
                 NutritionalStat("Calories", "${foodItem.calories}")
-                NutritionalStat("Carbs", "${foodItem.carbs}g")
+                NutritionalStat("Carbs", "${foodItem.totalCarbohydrates}g")
                 NutritionalStat("Fiber", "${foodItem.fiber}g")
                 NutritionalStat("Sugar", "${foodItem.sugars}g")
             }
@@ -165,48 +152,8 @@ fun FoodSummaryCard(
 
                 Spacer(modifier = Modifier.height(16.dp))
             }
-
-            // Alternatives section
-            if (foodItem.primaryAlternatives.isNotEmpty()) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { alternativesExpanded = !alternativesExpanded },
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text(
-                        text = "Smart Alternatives (${foodItem.primaryAlternatives.size})",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    IconButton(onClick = { alternativesExpanded = !alternativesExpanded }) {
-                        Icon(
-                            imageVector = if (alternativesExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                            contentDescription = if (alternativesExpanded) "Collapse alternatives" else "Expand alternatives"
-                        )
-                    }
-                }
-
-                AnimatedVisibility(
-                    visible = alternativesExpanded,
-                    enter = expandVertically(),
-                    exit = shrinkVertically()
-                ) {
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        foodItem.primaryAlternatives.forEach { alternative ->
-                            AlternativeItem(
-                                alternative = alternative,
-                                onClick = { onAlternativeClick(alternative.foodId) }
-                            )
-                        }
-                    }
-                }
-            }
+            
+            // Alternatives section removed as it is now nested within specific conditions
         }
     }
 }
@@ -255,69 +202,5 @@ private fun SafetyBadge(safetyRating: String) {
             color = textColor,
             fontWeight = FontWeight.Medium
         )
-    }
-}
-
-@Composable
-private fun AlternativeItem(
-    alternative: com.example.diabite.data.model.Alternative,
-    onClick: () -> Unit
-) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onClick() },
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        shape = RoundedCornerShape(12.dp)
-    ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Alternative icon
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.secondaryContainer),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "🍎", // Placeholder emoji
-                    style = MaterialTheme.typography.titleMedium
-                )
-            }
-
-            Spacer(modifier = Modifier.width(12.dp))
-
-            // Alternative details
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = alternative.foodId.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() },
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    text = alternative.advantage,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.primary
-                )
-                Text(
-                    text = alternative.improvement,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-
-            Spacer(modifier = Modifier.width(8.dp))
-
-            // Action indicator
-            Text(
-                text = "→",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.primary
-            )
-        }
     }
 }

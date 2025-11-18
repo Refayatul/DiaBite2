@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -19,6 +20,13 @@ class UserViewModel @Inject constructor(
 
     private val _user = MutableStateFlow<User?>(null)
     val user: StateFlow<User?> = _user.asStateFlow()
+
+    // Derived state flows for UI convenience
+    private val _favoriteFoodIds = MutableStateFlow<List<String>>(emptyList())
+    val favoriteFoodIds: StateFlow<List<String>> = _favoriteFoodIds.asStateFlow()
+
+    private val _searchHistory = MutableStateFlow<List<String>>(emptyList())
+    val searchHistory: StateFlow<List<String>> = _searchHistory.asStateFlow()
 
     init {
         observeUser()
@@ -32,6 +40,8 @@ class UserViewModel @Inject constructor(
                 }
                 .collect { user ->
                     _user.value = user
+                    _favoriteFoodIds.value = user?.favoriteFoodIds ?: emptyList()
+                    _searchHistory.value = user?.searchHistory ?: emptyList()
                 }
         }
     }

@@ -2,11 +2,16 @@
   "name": "diabite",
   "version": "1.0.0",
   "description": "Upload food data to Firebase Firestore",
+  "type": "module",
   "main": "upload-data.js",
   "scripts": {
     "upload": "node upload-data.js"
   },
   "dependencies": {
-    "firebase-admin": "^11.8.0"
+    "dotenv": "^16.6.1",
+    "firebase-admin": "^11.11.1",
+    "google-gax": "^5.0.6",
+    "mime-types": "^2.1.35",
+    "protobufjs": "^7.5.4"
   }
 }
