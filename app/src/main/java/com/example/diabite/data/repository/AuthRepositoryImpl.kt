@@ -6,8 +6,11 @@ import com.example.diabite.util.AppError
 import com.example.diabite.util.Resource
 import com.google.android.gms.auth.api.signin.GoogleSignInClient
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
+import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.tasks.await
 import timber.log.Timber
@@ -152,34 +155,40 @@ class AuthRepositoryImpl @Inject constructor(
         }
     }
 
-    override fun getCurrentUser(): Flow<User?> = flow {
+    override fun getCurrentUser(): Flow<User?> = callbackFlow {
         val firebaseUser = firebaseAuth.currentUser
-        if (firebaseUser != null) {
-            val userDocRef = firestore.collection("users").document(firebaseUser.uid)
-            try {
-                val userDoc = userDocRef.get().await()
-
-                val user = if (userDoc.exists()) {
-                    userDoc.toObject(User::class.java) ?: run {
-                        // Document exists but mapping failed. DO NOT OVERWRITE.
-                        Timber.w("Failed to map user profile from existing document. Falling back to basic user.")
-                        createDefaultUser(firebaseUser)
-                    }
-                } else {
-                    // Document does not exist. Create, save, and return the new user.
-                    val newUser = createDefaultUser(firebaseUser)
-                    userDocRef.set(newUser).await()
-                    newUser
-                }
-                emit(user)
-            } catch (e: Exception) {
-                // Network/Firebase error on read. DO NOT OVERWRITE.
-                Timber.w(e, "Failed to read user profile from Firestore. Returning basic user data as temporary fallback.")
-                emit(createDefaultUser(firebaseUser))
-            }
-        } else {
-            emit(null)
+        if (firebaseUser == null) {
+            trySend(null)
+            close()
+            return@callbackFlow
         }
+
+        val userDocRef = firestore.collection("users").document(firebaseUser.uid)
+
+        val listener = userDocRef.addSnapshotListener { snapshot, error ->
+            if (error != null) {
+                Timber.w(error, "Listen for user profile failed.")
+                // Don't close the flow, just emit a basic user and let it recover
+                trySend(createDefaultUser(firebaseUser))
+                return@addSnapshotListener
+            }
+
+            if (snapshot != null && snapshot.exists()) {
+                val user = snapshot.toObject(User::class.java) ?: createDefaultUser(firebaseUser)
+                trySend(user)
+            } else {
+                // Document doesn't exist, create it for the first time
+                val newUser = createDefaultUser(firebaseUser)
+                userDocRef.set(newUser).addOnSuccessListener {
+                    trySend(newUser) // Emit the new user after creation
+                }.addOnFailureListener {
+                    Timber.w(it, "Failed to create user document for the first time.")
+                    trySend(newUser) // Still send a user object on failure
+                }
+            }
+        }
+
+        awaitClose { listener.remove() } // Unregister listener when flow is cancelled
     }
 
     override fun updateUserProfile(user: User): Flow<Resource<User>> = flow {
@@ -215,6 +224,67 @@ class AuthRepositoryImpl @Inject constructor(
         } catch (e: Exception) {
             Timber.e(e, "Password reset failed")
             emit(Resource.firebaseError(e))
+        }
+    }
+
+    override fun addFavoriteFood(foodId: String): Flow<Resource<Unit>> = flow {
+        emit(Resource.loading())
+        try {
+            val uid = firebaseAuth.currentUser?.uid
+            if (uid == null) {
+                emit(Resource.error(AppError.AuthenticationError("User not logged in")))
+                return@flow
+            }
+            firestore.collection("users").document(uid)
+                .update("favoriteFoodIds", FieldValue.arrayUnion(foodId))
+                .await()
+            emit(Resource.success(Unit))
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to add favorite food")
+            emit(Resource.firebaseError(e))
+        }
+    }
+
+    override fun removeFavoriteFood(foodId: String): Flow<Resource<Unit>> = flow {
+        emit(Resource.loading())
+        try {
+            val uid = firebaseAuth.currentUser?.uid
+            if (uid == null) {
+                emit(Resource.error(AppError.AuthenticationError("User not logged in")))
+                return@flow
+            }
+            firestore.collection("users").document(uid)
+                .update("favoriteFoodIds", FieldValue.arrayRemove(foodId))
+                .await()
+            emit(Resource.success(Unit))
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to remove favorite food")
+            emit(Resource.firebaseError(e))
+        }
+    }
+
+    override fun addSearchToHistory(query: String): Flow<Resource<Unit>> = flow {
+        emit(Resource.loading())
+        try {
+            val uid = firebaseAuth.currentUser?.uid
+            if (uid == null) {
+                // Silently succeed if user is not logged in
+                emit(Resource.success(Unit))
+                return@flow
+            }
+            val userDocRef = firestore.collection("users").document(uid)
+
+            // To keep history clean and ordered by most recent, we remove and then add.
+            userDocRef.update("searchHistory", FieldValue.arrayRemove(query)).await()
+            userDocRef.update("searchHistory", FieldValue.arrayUnion(query)).await()
+
+            // Optional: Trim the history to a certain size
+            // This would require a transaction to be safe. For now, we'll let it grow.
+
+            emit(Resource.success(Unit))
+        } catch (e: Exception) {
+            Timber.w(e, "Failed to add search to history (non-critical)")
+            emit(Resource.success(Unit)) // Don't block user for this
         }
     }
 

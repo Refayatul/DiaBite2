@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -39,6 +40,10 @@ class FoodDetailViewModel @Inject constructor(
     private val _userDiabetesType = MutableStateFlow<String?>(null)
     val userDiabetesType: StateFlow<String?> = _userDiabetesType.asStateFlow()
 
+    // Favorite status
+    private val _isFavorite = MutableStateFlow(false)
+    val isFavorite: StateFlow<Boolean> = _isFavorite.asStateFlow()
+
     // UI states
     private val _isLoading = MutableStateFlow(true)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
@@ -51,92 +56,81 @@ class FoodDetailViewModel @Inject constructor(
     val expandedSections: StateFlow<Set<String>> = _expandedSections.asStateFlow()
 
     init {
-        loadUserConditions()
-        loadFoodDetails()
+        loadUserAndFoodDetails()
     }
 
-    private fun loadUserConditions() {
+    private fun loadUserAndFoodDetails() {
         viewModelScope.launch {
-            authRepository.getCurrentUser()
-                .catch { e ->
-                    _error.value = "Could not load user profile. Advice may not be personalized."
-                }
-                .collect { user ->
-                    // Normalize conditions to match food data keys (lowercase with underscores)
-                    _userConditions.value = user?.primaryConditions?.map { ConditionNormalizer.normalizeCondition(it) } ?: emptyList()
-                    _userDiabetesType.value = user?.diabetesType?.let { ConditionNormalizer.normalizeCondition(it) }
-                }
+            _isLoading.value = true
+            try {
+                // Fetch user data first to determine favorite status
+                val user = authRepository.getCurrentUser().first()
+                _userConditions.value = user?.primaryConditions?.map { ConditionNormalizer.normalizeCondition(it) } ?: emptyList()
+                _userDiabetesType.value = user?.diabetesType?.let { ConditionNormalizer.normalizeCondition(it) }
+                _isFavorite.value = user?.favoriteFoodIds?.contains(foodId) == true
+
+                // Then load food details
+                loadFoodDetails()
+            } catch (e: Exception) {
+                _error.value = "Could not load user profile. Advice may not be personalized."
+                loadFoodDetails() // Still try to load food details even if user profile fails
+            }
         }
     }
 
-    /**
-     * Load food details and alternatives
-     */
     private fun loadFoodDetails() {
         viewModelScope.launch {
-            try {
-                _isLoading.value = true
-                _error.value = null
-
-                // Load main food item
-                foodRepository.getFoodById(foodId).collect { resource ->
-                    when (resource) {
-                        is Resource.Success -> {
-                            val food = resource.data
-                            _foodItem.value = food
-                            if (food != null) {
-                                // Load alternatives
-                                loadAlternatives(food.id)
-                            }
-                            _isLoading.value = false
+            _isLoading.value = true
+            _error.value = null
+            foodRepository.getFoodById(foodId).collect { resource ->
+                when (resource) {
+                    is Resource.Success -> {
+                        val food = resource.data
+                        _foodItem.value = food
+                        if (food != null) {
+                            loadAlternatives(food.id)
                         }
-                        is Resource.Error -> {
-                            _error.value = resource.error?.userMessage ?: "Failed to load food details"
-                            _isLoading.value = false
-                        }
-                        is Resource.Loading -> {
-                            // Keep loading state
-                        }
+                        _isLoading.value = false
+                    }
+                    is Resource.Error -> {
+                        _error.value = resource.error?.userMessage ?: "Failed to load food details"
+                        _isLoading.value = false
+                    }
+                    is Resource.Loading -> {
+                        // Keep loading state
                     }
                 }
-
-            } catch (e: Exception) {
-                _error.value = e.message ?: "An unexpected error occurred"
-                _isLoading.value = false
             }
         }
     }
 
-    /**
-     * Load alternative foods
-     */
     private fun loadAlternatives(foodId: String) {
         viewModelScope.launch {
-            try {
-                foodRepository.getAlternatives(foodId).collect { resource ->
-                    when (resource) {
-                        is Resource.Success -> {
-                            _alternatives.value = resource.data ?: emptyList()
-                        }
-                        is Resource.Error -> {
-                            // Alternatives are optional, don't show error for this
-                            _alternatives.value = emptyList()
-                        }
-                        is Resource.Loading -> {
-                            // Keep current state
-                        }
-                    }
-                }
-            } catch (e: Exception) {
-                // Alternatives are optional
-                _alternatives.value = emptyList()
+            foodRepository.getAlternatives(foodId).collect {
+                _alternatives.value = if (it is Resource.Success) it.data ?: emptyList() else emptyList()
             }
         }
     }
 
-    /**
-     * Toggle section expansion
-     */
+    fun toggleFavoriteStatus() {
+        viewModelScope.launch {
+            val currentlyFavorite = _isFavorite.value
+            val action = if (currentlyFavorite) {
+                authRepository.removeFavoriteFood(foodId)
+            } else {
+                authRepository.addFavoriteFood(foodId)
+            }
+
+            action.collect { resource ->
+                if (resource is Resource.Success) {
+                    _isFavorite.value = !currentlyFavorite
+                } else if (resource is Resource.Error) {
+                    _error.value = "Failed to update favorite status."
+                }
+            }
+        }
+    }
+
     fun toggleSection(sectionKey: String) {
         val currentExpanded = _expandedSections.value.toMutableSet()
         if (currentExpanded.contains(sectionKey)) {
@@ -147,17 +141,7 @@ class FoodDetailViewModel @Inject constructor(
         _expandedSections.value = currentExpanded
     }
 
-    /**
-     * Check if section is expanded
-     */
-    fun isSectionExpanded(sectionKey: String): Boolean {
-        return _expandedSections.value.contains(sectionKey)
-    }
-
-    /**
-     * Retry loading food details
-     */
     fun retry() {
-        loadFoodDetails()
+        loadUserAndFoodDetails()
     }
 }

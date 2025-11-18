@@ -13,4 +13,9 @@ interface AuthRepository {
     fun updateUserProfile(user: User): Flow<Resource<User>>
     fun saveUserProfile(userProfile: com.example.diabite.data.model.UserProfile): Flow<Resource<Unit>>
     fun resetPassword(email: String): Flow<Resource<Unit>>
+
+    // New functions for favorites and history
+    fun addFavoriteFood(foodId: String): Flow<Resource<Unit>>
+    fun removeFavoriteFood(foodId: String): Flow<Resource<Unit>>
+    fun addSearchToHistory(query: String): Flow<Resource<Unit>>
 }

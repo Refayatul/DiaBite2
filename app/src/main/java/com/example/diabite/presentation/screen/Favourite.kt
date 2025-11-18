@@ -1,5 +1,6 @@
 package com.example.diabite.presentation.screen
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -12,25 +13,30 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.outlined.FavoriteBorder
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import androidx.hilt.navigation.compose.hiltViewModel
+import com.example.diabite.presentation.viewmodel.UserViewModel
 
 @Composable
-fun FavouriteScreenUI() {
+fun FavouriteScreenUI(
+    viewModel: UserViewModel = hiltViewModel(),
+    onFavoriteItemClick: (String) -> Unit
+) {
+    val user by viewModel.user.collectAsState()
+    val favoriteFoodIds = user?.favoriteFoodIds ?: emptyList()
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -45,84 +51,37 @@ fun FavouriteScreenUI() {
             modifier = Modifier.padding(vertical = 16.dp)
         )
 
-        // Placeholder data structure for favourite items
-        val favouriteItems = listOf(
-            FavouriteItem("Almonds (Small Handful)", "Low Risk", "Excellent source of healthy fats."),
-            FavouriteItem("Broccoli", "Very Low Risk", "High in fiber and vitamins."),
-            FavouriteItem("Oatmeal (Plain)", "Low Risk", "Good for stable morning energy."),
-            FavouriteItem("Chicken Breast (Grilled)", "No Carbs", "Lean protein source."),
-        )
-
-        if (favouriteItems.isEmpty()) {
+        if (favoriteFoodIds.isEmpty()) {
             EmptyFavouritesMessage()
         } else {
             LazyColumn(
-                modifier = Modifier.fillMaxWidth(),
-                contentPadding = PaddingValues(bottom = 60.dp), // Space for bottom bar
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(bottom = 60.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                items(favouriteItems) { item ->
-                    FavouriteCard(item = item)
+                items(favoriteFoodIds) { foodId ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onFavoriteItemClick(foodId) }
+                            .padding(vertical = 12.dp, horizontal = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.FavoriteBorder,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            text = foodId.replaceFirstChar { it.uppercase() }, // Simple display format
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
                 }
             }
-        }
-    }
-}
-
-/**
- * Data class to represent a favourite food entry.
- */
-data class FavouriteItem(
-    val foodName: String,
-    val riskLevel: String,
-    val note: String
-)
-
-@Composable
-fun FavouriteCard(item: FavouriteItem) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-    ) {
-        Column(
-            modifier = Modifier
-                .padding(16.dp)
-                .fillMaxWidth()
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = item.foodName,
-                    style = MaterialTheme.typography.titleMedium.copy(
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 18.sp
-                    ),
-                    color = MaterialTheme.colorScheme.onTertiaryContainer
-                )
-                Icon(
-                    imageVector = Icons.Filled.Favorite,
-                    contentDescription = "Favourited",
-                    tint = MaterialTheme.colorScheme.tertiary,
-                    modifier = Modifier.size(24.dp)
-                )
-            }
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = "Risk: ${item.riskLevel}",
-                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-                color = MaterialTheme.colorScheme.onTertiaryContainer
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = item.note,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.8f)
-            )
         }
     }
 }

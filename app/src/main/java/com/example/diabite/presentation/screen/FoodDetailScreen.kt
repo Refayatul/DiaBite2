@@ -21,6 +21,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Restaurant
@@ -59,13 +61,12 @@ fun FoodDetailScreen(
     val alternatives by viewModel.alternatives.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val error by viewModel.error.collectAsState()
+    val isFavorite by viewModel.isFavorite.collectAsState()
     val expandedSections by viewModel.expandedSections.collectAsState()
 
-    // Get real user data from the ViewModel (now normalized)
     val userConditions by viewModel.userConditions.collectAsState()
     val userDiabetesType by viewModel.userDiabetesType.collectAsState()
 
-    // Combine all normalized conditions (from array and diabetesType)
     val allUserConditions = (userConditions + listOfNotNull(userDiabetesType)).distinct().filter { it.isNotBlank() }
 
     Scaffold(
@@ -75,6 +76,15 @@ fun FoodDetailScreen(
                 navigationIcon = {
                     IconButton(onClick = { navController.navigateUp() }) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                    }
+                },
+                actions = {
+                    IconButton(onClick = { viewModel.toggleFavoriteStatus() }) {
+                        Icon(
+                            imageVector = if (isFavorite) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
+                            contentDescription = "Favorite",
+                            tint = if (isFavorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                        )
                     }
                 }
             )
@@ -105,11 +115,10 @@ fun FoodDetailScreen(
                     FoodDetailContent(
                         foodItem = foodItem!!,
                         alternatives = alternatives,
-                        userConditions = allUserConditions, // Pass normalized keys
+                        userConditions = allUserConditions,
                         expandedSections = expandedSections,
                         onSectionToggle = { viewModel.toggleSection(it) },
                         onAlternativeClick = { alternative ->
-                            // Navigate to alternative food detail
                             navController.navigate("foodDetail/${alternative.id}")
                         }
                     )
