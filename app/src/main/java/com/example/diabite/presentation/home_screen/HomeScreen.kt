@@ -14,7 +14,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ExitToApp
+import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Home
@@ -92,7 +92,7 @@ fun HomeScreen(navController: NavHostController, authViewModel: AuthViewModel = 
                         Icon(imageVector = Icons.Filled.Settings, contentDescription = "Settings", tint = MaterialTheme.colorScheme.primary)
                     }
                     IconButton(onClick = { showLogoutDialog.value = true }) {
-                        Icon(imageVector = Icons.Filled.ExitToApp, contentDescription = "Logout", tint = MaterialTheme.colorScheme.primary)
+                        Icon(imageVector = Icons.AutoMirrored.Filled.ExitToApp, contentDescription = "Logout", tint = MaterialTheme.colorScheme.primary)
                     }
                 }
             )
@@ -134,8 +134,8 @@ fun HomeScreen(navController: NavHostController, authViewModel: AuthViewModel = 
                 HomeScreenUI(name = currentUser?.displayName ?: "User", email = currentUser?.email ?: "", mainNavController = navController)
             }
             composable(BottomNavItem.History.route) {
-                HistoryScreenUI(viewModel = userViewModel) { foodId ->
-                    navController.navigate(Route.FoodDetail(foodId))
+                HistoryScreenUI(viewModel = userViewModel) { query ->
+                    navController.navigate(Route.SearchFood(query))
                 }
             }
             composable(BottomNavItem.Favourite.route) {
@@ -183,7 +183,7 @@ fun HomeScreenUI(name: String, email: String, mainNavController: NavController) 
             shape = RoundedCornerShape(16.dp),
             elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
-            onClick = { mainNavController.navigate(Route.SearchFood) }
+            onClick = { mainNavController.navigate(Route.SearchFood("")) }
         ) {
             Column(
                 modifier = Modifier.fillMaxWidth().padding(24.dp),

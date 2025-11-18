@@ -148,6 +148,8 @@ class AuthRepositoryImpl @Inject constructor(
             firebaseAuth.signOut()
             // Sign out from Google Sign-In to force account selection on next login
             googleSignInClient.signOut().await()
+            // Clear local Firestore cache
+            firestore.clearPersistence().await()
             emit(Resource.success(Unit))
         } catch (e: Exception) {
             Timber.e(e, "Logout failed")

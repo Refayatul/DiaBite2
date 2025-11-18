@@ -20,7 +20,7 @@ import androidx.navigation.toRoute
 import com.example.diabite.presentation.screen.AISuggestionsUI
 import com.example.diabite.presentation.screen.DiabetesDetailsScreen
 import com.example.diabite.presentation.screen.FoodDetailScreen
-import com.example.diabite.presentation.screen.HomeScreen
+import com.example.diabite.presentation.home_screen.HomeScreen
 import com.example.diabite.presentation.screen.LoginScreen
 import com.example.diabite.presentation.screen.MedicalConditionsScreen
 import com.example.diabite.presentation.screen.RegisterScreen

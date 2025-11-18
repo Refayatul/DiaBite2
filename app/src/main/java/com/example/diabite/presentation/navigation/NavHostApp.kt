@@ -3,13 +3,10 @@ package com.example.diabite.presentation.navigation
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -21,13 +18,12 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import com.example.diabite.common.Route
+import com.example.diabite.presentation.home_screen.HomeScreen
 import com.example.diabite.presentation.screen.AISuggestionsUI
 import com.example.diabite.presentation.screen.DiabetesDetailsScreen
 import com.example.diabite.presentation.screen.FoodDetailScreen
-import com.example.diabite.presentation.home_screen.HomeScreen
 import com.example.diabite.presentation.screen.LoginScreen
 import com.example.diabite.presentation.screen.MedicalConditionsScreen
-import com.example.diabite.presentation.screen.ProfileScreen
 import com.example.diabite.presentation.screen.RegisterScreen
 import com.example.diabite.presentation.screen.SearchScreen
 import com.example.diabite.presentation.screen.SettingsScreen
@@ -136,24 +132,6 @@ fun NavHostApp(authViewModel: AuthViewModel = hiltViewModel()) {
         composable<Route.Detail>() { backStackEntry ->
             val (name, email) = backStackEntry.toRoute<Route.Detail>()
             HomeScreen(navController = navController)
-        }
-    }
-}
-
-@Composable
-fun TextPlaceholderScreen(title: String) {
-    Surface(
-        modifier = Modifier.fillMaxSize(),
-        color = MaterialTheme.colorScheme.background
-    ) {
-        Box(
-            contentAlignment = Alignment.Center,
-            modifier = Modifier.fillMaxSize()
-        ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.headlineMedium
-            )
         }
     }
 }

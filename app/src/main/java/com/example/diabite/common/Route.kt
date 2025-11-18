@@ -31,7 +31,7 @@ sealed interface Route {
 
     // Core Feature Screens, navigated to from the HomeScreen dashboard
     @Serializable
-    data object SearchFood : Route
+    data class SearchFood(val query: String) : Route
 
     @Serializable
     data class FoodDetail(val foodId: String) : Route
