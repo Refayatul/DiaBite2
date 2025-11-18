@@ -59,19 +59,20 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.navigation.NavController
+import com.example.diabite.data.model.ConditionRecommendation
 import com.example.diabite.data.model.FoodItem
 import com.example.diabite.presentation.viewmodel.FoodDetailViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FoodDetailScreen(
-    navController: NavController,
-    viewModel: FoodDetailViewModel = hiltViewModel()
+    viewModel: FoodDetailViewModel = hiltViewModel(),
+    onBackClick: () -> Unit
 ) {
     val foodItem by viewModel.foodItem.collectAsState()
     val alternatives by viewModel.alternatives.collectAsState()
@@ -92,7 +93,7 @@ fun FoodDetailScreen(
                     )
                 },
                 navigationIcon = {
-                    IconButton(onClick = { navController.navigateUp() }) {
+                    IconButton(onClick = onBackClick) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
@@ -129,7 +130,7 @@ fun FoodDetailScreen(
                     diabetesType = userDiabetesType,
                     expandedSections = expandedSections,
                     onSectionToggle = { viewModel.toggleSection(it) },
-                    onAlternativeClick = { alternative -> navController.navigate("foodDetail/${alternative.id}") }
+                    onAlternativeClick = { alternative -> /* Navigate to alternative */ }
                 )
             }
         }
@@ -214,12 +215,11 @@ private fun FoodDetailContent(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
+            .padding(bottom = 16.dp)
     ) {
         FoodHeader(foodItem = foodItem, diabetesType = diabetesType)
+        Spacer(modifier = Modifier.height(16.dp))
 
-        Spacer(modifier = Modifier.height(24.dp))
-
-        // Diabetes Type Advice - First and auto-expanded
         ExpandableSection(
             title = "🏥 Diabetes Type Advice",
             sectionKey = "diabetes_advice",
@@ -228,8 +228,8 @@ private fun FoodDetailContent(
         ) {
             ConditionAdviceSection(foodItem = foodItem, diabetesType = diabetesType)
         }
+        Spacer(modifier = Modifier.height(8.dp))
 
-        // Smart Alternatives - Second
         if (alternatives.isNotEmpty()) {
             ExpandableSection(
                 title = "🔄 Smart Alternatives",
@@ -238,15 +238,15 @@ private fun FoodDetailContent(
                 onToggle = onSectionToggle
             ) {
                 AlternativesComparisonSection(
-                    originalFood = foodItem!!,
+                    originalFood = foodItem,
                     alternatives = alternatives,
                     diabetesType = diabetesType,
                     onAlternativeClick = onAlternativeClick
                 )
             }
+            Spacer(modifier = Modifier.height(8.dp))
         }
 
-        // Nutritional Facts - Third and auto-expanded
         ExpandableSection(
             title = "📊 Nutritional Facts",
             sectionKey = "nutrition",
@@ -254,81 +254,6 @@ private fun FoodDetailContent(
             onToggle = onSectionToggle
         ) {
             NutritionalFactsSection(foodItem = foodItem)
-        }
-
-        Spacer(modifier = Modifier.height(32.dp))
-    }
-}
-
-@Composable
-private fun DiabetesTypeIndicator(diabetesType: String) {
-    val (backgroundColor, textColor, icon) = when (diabetesType.lowercase()) {
-        "diabetes type 1", "type 1" -> {
-            Triple(
-                MaterialTheme.colorScheme.primaryContainer,
-                MaterialTheme.colorScheme.primary,
-                Icons.Filled.Favorite
-            )
-        }
-        "diabetes type 2", "type 2" -> {
-            Triple(
-                MaterialTheme.colorScheme.secondaryContainer,
-                MaterialTheme.colorScheme.secondary,
-                Icons.Filled.FavoriteBorder
-            )
-        }
-        else -> {
-            Triple(
-                MaterialTheme.colorScheme.tertiaryContainer,
-                MaterialTheme.colorScheme.tertiary,
-                Icons.Filled.QuestionMark
-            )
-        }
-    }
-
-    val borderColor = when (diabetesType.lowercase()) {
-        "diabetes type 1", "type 1" -> MaterialTheme.colorScheme.primary
-        "diabetes type 2", "type 2" -> MaterialTheme.colorScheme.secondary
-        else -> MaterialTheme.colorScheme.tertiary
-    }
-
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        colors = CardDefaults.cardColors(containerColor = backgroundColor),
-        border = androidx.compose.foundation.BorderStroke(2.dp, borderColor),
-        shape = RoundedCornerShape(16.dp)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = textColor,
-                modifier = Modifier.size(20.dp)
-            )
-            Spacer(modifier = Modifier.width(12.dp))
-            Text(
-                text = "Personalized for: $diabetesType",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = textColor,
-                textAlign = TextAlign.Center
-            )
-            Spacer(modifier = Modifier.width(12.dp))
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = textColor,
-                modifier = Modifier.size(20.dp)
-            )
         }
     }
 }
@@ -338,9 +263,13 @@ private fun FoodHeader(foodItem: FoodItem, diabetesType: String?) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(16.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-        shape = RoundedCornerShape(20.dp)
+            .padding(horizontal = 16.dp), // Kept horizontal padding consistent
+        elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
+        shape = RoundedCornerShape(20.dp),
+        // CHANGED: Use the standard surface color instead of a variant
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface 
+        )
     ) {
         Column(
             modifier = Modifier.padding(24.dp),
@@ -361,7 +290,6 @@ private fun FoodHeader(foodItem: FoodItem, diabetesType: String?) {
                     modifier = Modifier.size(48.dp)
                 )
             }
-
             Spacer(modifier = Modifier.height(20.dp))
 
             // Food Name
@@ -369,21 +297,19 @@ private fun FoodHeader(foodItem: FoodItem, diabetesType: String?) {
                 text = foodItem.name,
                 style = MaterialTheme.typography.headlineLarge,
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface,
+                color = MaterialTheme.colorScheme.onSurface, // Ensure text color is correct
                 textAlign = TextAlign.Center,
                 maxLines = 2
             )
-
             Spacer(modifier = Modifier.height(4.dp))
 
             // Category
             Text(
                 text = foodItem.category.replaceFirstChar { it.uppercase() },
                 style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.primary,
+                color = MaterialTheme.colorScheme.primary, // Ensure text color is correct
                 textAlign = TextAlign.Center
             )
-
             Spacer(modifier = Modifier.height(20.dp))
 
             // Nutritional Highlights
@@ -396,7 +322,6 @@ private fun FoodHeader(foodItem: FoodItem, diabetesType: String?) {
                 NutritionalHighlight("Protein", "${foodItem.protein}g")
                 NutritionalHighlight("Fiber", "${foodItem.fiber}g")
             }
-
             Spacer(modifier = Modifier.height(16.dp))
 
             // Safety Rating with reasoning
@@ -423,43 +348,48 @@ private fun ExpandableSection(
         label = "rotation"
     )
 
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable { onToggle(sectionKey) }
-                .padding(horizontal = 16.dp, vertical = 16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Icon(
-                imageVector = Icons.Default.KeyboardArrowDown,
-                contentDescription = null,
-                modifier = Modifier.rotate(animatedRotation),
-                tint = MaterialTheme.colorScheme.primary
-            )
-        }
-
-        AnimatedVisibility(
-            visible = isExpanded,
-            enter = expandVertically(
-                animationSpec = tween(durationMillis = 300)
-            ),
-            exit = shrinkVertically(
-                animationSpec = tween(durationMillis = 300)
-            )
-        ) {
-            Box(modifier = Modifier.padding(horizontal = 16.dp)) {
-                Card(
-                    shape = RoundedCornerShape(16.dp),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-                ) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
+        shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        )
+    ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onToggle(sectionKey) }
+                    .padding(horizontal = 16.dp, vertical = 16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Icon(
+                    imageVector = Icons.Default.KeyboardArrowDown,
+                    contentDescription = null,
+                    modifier = Modifier.rotate(animatedRotation),
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            }
+            AnimatedVisibility(
+                visible = isExpanded,
+                enter = expandVertically(
+                    animationSpec = tween(durationMillis = 300)
+                ),
+                exit = shrinkVertically(
+                    animationSpec = tween(durationMillis = 300)
+                )
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
                     content()
                 }
             }
@@ -469,7 +399,7 @@ private fun ExpandableSection(
 
 @Composable
 private fun NutritionalFactsSection(foodItem: FoodItem) {
-    Column(modifier = Modifier.padding(16.dp)) {
+    Column(modifier = Modifier.fillMaxWidth()) {
         Text(
             text = "Complete Nutritional Profile",
             style = MaterialTheme.typography.headlineSmall,
@@ -478,44 +408,82 @@ private fun NutritionalFactsSection(foodItem: FoodItem) {
             modifier = Modifier.padding(bottom = 16.dp)
         )
 
-        // Macronutrients
-        Text(
-            text = "Macronutrients",
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(bottom = 8.dp)
-        )
-
-        NutritionalRow("Calories", "${foodItem.calories} kcal")
-        NutritionalRow("Total Carbohydrates", "${foodItem.totalCarbohydrates}g")
-        NutritionalRow("Dietary Fiber", "${foodItem.fiber}g")
-        NutritionalRow("Sugars", "${foodItem.sugars}g")
-        NutritionalRow("Protein", "${foodItem.protein}g")
-        NutritionalRow("Total Fat", "${foodItem.totalFat}g")
-        NutritionalRow("Saturated Fat", "${foodItem.saturatedFat}g")
+        NutritionCard(
+            title = "Macronutrients",
+            icon = Icons.Default.Restaurant,
+            color = MaterialTheme.colorScheme.primary
+        ) {
+            NutritionalRow("Calories", "${foodItem.calories} kcal")
+            NutritionalRow("Total Carbohydrates", "${foodItem.totalCarbohydrates} g")
+            NutritionalRow("Dietary Fiber", "${foodItem.fiber} g")
+            NutritionalRow("Sugars", "${foodItem.sugars} g")
+            NutritionalRow("Protein", "${foodItem.protein} g")
+            NutritionalRow("Total Fat", "${foodItem.totalFat} g")
+            NutritionalRow("Saturated Fat", "${foodItem.saturatedFat} g")
+        }
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Micronutrients
-        Text(
-            text = "Additional Information",
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(bottom = 8.dp)
-        )
+        NutritionCard(
+            title = "Additional Information",
+            icon = Icons.Default.Lightbulb,
+            color = MaterialTheme.colorScheme.tertiary
+        ) {
+            NutritionalRow("Sodium", "${foodItem.sodium} mg")
+            NutritionalRow("Potassium", "${foodItem.potassium} mg")
+            if (foodItem.glycemicIndex > 0) NutritionalRow("Glycemic Index", "${foodItem.glycemicIndex}")
+            if (foodItem.glycemicLoad > 0) NutritionalRow("Glycemic Load", "${foodItem.glycemicLoad}")
+        }
+    }
+}
 
-        NutritionalRow("Sodium", "${foodItem.sodium}mg")
-        NutritionalRow("Potassium", "${foodItem.potassium}mg")
-        if (foodItem.glycemicIndex > 0) NutritionalRow("Glycemic Index", "${foodItem.glycemicIndex}")
-        if (foodItem.glycemicLoad > 0) NutritionalRow("Glycemic Load", "${foodItem.glycemicLoad}")
+@Composable
+private fun NutritionCard(
+    title: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    color: Color,
+    content: @Composable () -> Unit
+) {
+    Card(
+        shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface // Changed to surface for better contrast
+        ),
+        border = BorderStroke(1.dp, color.copy(alpha = 0.3f)) // Added subtle border
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(color.copy(alpha = 0.1f)) // Light background for header
+                    .clip(RoundedCornerShape(12.dp)) // Clipped background for header
+                    .padding(horizontal = 12.dp, vertical = 8.dp)
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = color,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = color
+                )
+            }
+            Spacer(modifier = Modifier.height(12.dp)) // Spacing between header and content
+            content()
+        }
     }
 }
 
 @Composable
 private fun ConditionAdviceSection(foodItem: FoodItem, diabetesType: String?) {
-    Column(modifier = Modifier.padding(16.dp)) {
+    Column(modifier = Modifier.fillMaxWidth()) {
         Text(
             text = "Personalized Diabetes Advice",
             style = MaterialTheme.typography.headlineSmall,
@@ -529,7 +497,7 @@ private fun ConditionAdviceSection(foodItem: FoodItem, diabetesType: String?) {
                 colors = CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.errorContainer
                 ),
-                shape = RoundedCornerShape(12.dp)
+                shape = RoundedCornerShape(16.dp)
             ) {
                 Row(
                     modifier = Modifier.padding(16.dp),
@@ -561,7 +529,7 @@ private fun ConditionAdviceSection(foodItem: FoodItem, diabetesType: String?) {
                 colors = CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.surfaceVariant
                 ),
-                shape = RoundedCornerShape(12.dp)
+                shape = RoundedCornerShape(16.dp)
             ) {
                 Row(
                     modifier = Modifier.padding(16.dp),
@@ -585,202 +553,9 @@ private fun ConditionAdviceSection(foodItem: FoodItem, diabetesType: String?) {
 }
 
 @Composable
-private fun AlternativesComparisonSection(
-    originalFood: FoodItem,
-    alternatives: List<FoodItem>,
-    diabetesType: String?,
-    onAlternativeClick: (FoodItem) -> Unit
-) {
-    Column(modifier = Modifier.padding(16.dp)) {
-        Text(
-            text = "Smart Alternatives",
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.padding(bottom = 16.dp)
-        )
-
-        if (alternatives.isEmpty()) {
-            Text(
-                text = "No alternatives available for this food.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            return
-        }
-
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 8.dp),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text(
-                text = "Food",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.weight(1.2f)
-            )
-            Text(
-                text = "Calories",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.weight(0.8f)
-            )
-            Text(
-                text = "Carbs",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.weight(0.8f)
-            )
-            Text(
-                text = "Advantage",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.weight(1.2f)
-            )
-        }
-
-        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-
-        alternatives.forEach { alternative ->
-            val advantage = diabetesType?.let { dt ->
-                val normalizedKey = normalizeConditionKey(dt)
-                val recommendation = originalFood.recommendations[normalizedKey]
-                recommendation?.alternatives?.find { it.foodId == alternative.id }?.advantage
-                    ?: "Better alternative"
-            } ?: "Better alternative"
-
-            ComparisonRow(
-                alternative.name,
-                alternative.calories,
-                alternative.totalCarbohydrates,
-                advantage,
-                isOriginal = false,
-                diabetesType = diabetesType
-            ) {
-                onAlternativeClick(alternative)
-            }
-        }
-    }
-}
-
-@Composable
-private fun NutritionalHighlight(label: String, value: String) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.padding(horizontal = 4.dp)
-    ) {
-        Text(
-            text = value,
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurface
-        )
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-    }
-}
-
-@Composable
-private fun SafetyRatingDisplay(safetyRating: String, reasoning: String? = null) {
-    val (backgroundColor, textColor) = when (safetyRating.lowercase()) {
-        "avoid" -> MaterialTheme.colorScheme.errorContainer to MaterialTheme.colorScheme.onErrorContainer
-        "caution", "moderate" -> MaterialTheme.colorScheme.tertiaryContainer to MaterialTheme.colorScheme.onTertiaryContainer
-        "good" -> MaterialTheme.colorScheme.primaryContainer to MaterialTheme.colorScheme.onPrimaryContainer
-        else -> MaterialTheme.colorScheme.surfaceVariant to MaterialTheme.colorScheme.onSurfaceVariant
-    }
-
-    Card(
-        colors = CardDefaults.cardColors(containerColor = backgroundColor),
-        shape = RoundedCornerShape(16.dp),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            // Safety Level Header
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(textColor.copy(alpha = 0.1f))
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "Safety: $safetyRating",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = textColor,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-
-            if (reasoning != null) {
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // Reasoning Section
-                Card(
-                    colors = CardDefaults.cardColors(
-                        containerColor = textColor.copy(alpha = 0.05f)
-                    ),
-                    shape = RoundedCornerShape(8.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(modifier = Modifier.padding(12.dp)) {
-                        Text(
-                            text = "Assessment",
-                            style = MaterialTheme.typography.labelLarge,
-                            color = textColor,
-                            fontWeight = FontWeight.SemiBold,
-                            modifier = Modifier.padding(bottom = 4.dp)
-                        )
-                        Text(
-                            text = reasoning,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = textColor
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun NutritionalRow(label: String, value: String) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 6.dp),
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurface
-        )
-        Text(
-            text = value,
-            style = MaterialTheme.typography.bodyLarge,
-            fontWeight = FontWeight.Medium,
-            color = MaterialTheme.colorScheme.onSurface
-        )
-    }
-}
-
-@Composable
 private fun ConditionAdviceCard(
     condition: String,
-    recommendation: com.example.diabite.data.model.ConditionRecommendation,
+    recommendation: ConditionRecommendation,
     diabetesType: String
 ) {
     val diabetesColor = when (diabetesType.lowercase()) {
@@ -790,61 +565,39 @@ private fun ConditionAdviceCard(
     }
 
     Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        shape = RoundedCornerShape(12.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        )
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            // Header with condition
             Text(
                 text = condition,
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
-                color = diabetesColor
+                color = diabetesColor,
+                modifier = Modifier.padding(bottom = 16.dp)
             )
 
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Serving and Timing Advice in a row
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Serving Advice",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = diabetesColor,
-                        modifier = Modifier.padding(bottom = 4.dp)
-                    )
-                    Text(
-                        text = recommendation.servingAdvice,
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                }
+                AdviceCardSection(
+                    title = "Serving Advice",
+                    content = recommendation.servingAdvice,
+                    color = diabetesColor
+                )
                 Spacer(modifier = Modifier.width(16.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Timing Advice",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = diabetesColor,
-                        modifier = Modifier.padding(bottom = 4.dp)
-                    )
-                    Text(
-                        text = recommendation.timingAdvice,
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                }
+                AdviceCardSection(
+                    title = "Timing Advice",
+                    content = recommendation.timingAdvice,
+                    color = diabetesColor
+                )
             }
-
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Health Impacts
             Text(
                 text = "Health Impacts",
                 style = MaterialTheme.typography.titleMedium,
@@ -861,10 +614,8 @@ private fun ConditionAdviceCard(
                 HealthImpactChip("Kidney", recommendation.kidneyImpact)
                 HealthImpactChip("Blood Pressure", recommendation.bloodPressureImpact)
             }
-
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Key Points
             if (recommendation.keyPoints.isNotEmpty()) {
                 Text(
                     text = "Key Points",
@@ -876,7 +627,9 @@ private fun ConditionAdviceCard(
                 recommendation.keyPoints.forEach { point ->
                     Row(
                         verticalAlignment = Alignment.Top,
-                        modifier = Modifier.padding(vertical = 4.dp)
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp)
                     ) {
                         Text(
                             text = "• ",
@@ -894,7 +647,6 @@ private fun ConditionAdviceCard(
                 Spacer(modifier = Modifier.height(12.dp))
             }
 
-            // Pairing Suggestions
             if (recommendation.pairingSuggestions.isNotEmpty()) {
                 Text(
                     text = "Pairing Suggestions",
@@ -927,7 +679,6 @@ private fun ConditionAdviceCard(
                 Spacer(modifier = Modifier.height(12.dp))
             }
 
-            // Nutritional Benefits
             if (recommendation.nutritionalBenefits.isNotEmpty()) {
                 Text(
                     text = "Nutritional Benefits",
@@ -937,50 +688,16 @@ private fun ConditionAdviceCard(
                     modifier = Modifier.padding(bottom = 8.dp)
                 )
                 recommendation.nutritionalBenefits.forEach { benefit ->
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 4.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = diabetesColor.copy(alpha = 0.05f)
-                        ),
-                        border = BorderStroke(1.dp, diabetesColor.copy(alpha = 0.2f))
-                    ) {
-                        Column(modifier = Modifier.padding(12.dp)) {
-                            Row(
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text(
-                                    text = benefit.category.replace('_', ' ').replaceFirstChar { it.uppercase() },
-                                    style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = diabetesColor
-                                )
-                                Text(
-                                    text = benefit.strength.replaceFirstChar { it.uppercase() },
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = diabetesColor,
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(4.dp))
-                                        .background(diabetesColor.copy(alpha = 0.2f))
-                                        .padding(horizontal = 8.dp, vertical = 2.dp)
-                                )
-                            }
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = benefit.description,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                        }
-                    }
+                    BenefitCard(
+                        category = benefit.category.replace('_', ' ').replaceFirstChar { it.uppercase() },
+                        strength = benefit.strength.replaceFirstChar { it.uppercase() },
+                        description = benefit.description,
+                        color = diabetesColor
+                    )
                 }
                 Spacer(modifier = Modifier.height(12.dp))
             }
 
-            // Potential Concerns
             if (recommendation.potentialConcerns.isNotEmpty()) {
                 Text(
                     text = "Potential Concerns",
@@ -990,50 +707,17 @@ private fun ConditionAdviceCard(
                     modifier = Modifier.padding(bottom = 8.dp)
                 )
                 recommendation.potentialConcerns.forEach { concern ->
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 4.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.1f)
-                        ),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.2f))
-                    ) {
-                        Column(modifier = Modifier.padding(12.dp)) {
-                            Row(
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text(
-                                    text = concern.category.replace('_', ' ').replaceFirstChar { it.uppercase() },
-                                    style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = MaterialTheme.colorScheme.error
-                                )
-                                Text(
-                                    text = concern.severity.replaceFirstChar { it.uppercase() },
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.error,
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(4.dp))
-                                        .background(MaterialTheme.colorScheme.error.copy(alpha = 0.2f))
-                                        .padding(horizontal = 8.dp, vertical = 2.dp)
-                                )
-                            }
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = concern.description,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                        }
-                    }
+                    BenefitCard(
+                        category = concern.category.replace('_', ' ').replaceFirstChar { it.uppercase() },
+                        strength = concern.severity.replaceFirstChar { it.uppercase() },
+                        description = concern.description,
+                        color = MaterialTheme.colorScheme.error,
+                        isConcern = true
+                    )
                 }
                 Spacer(modifier = Modifier.height(12.dp))
             }
 
-            // Preparation Tips
             if (recommendation.preparationTips.isNotEmpty()) {
                 Text(
                     text = "Preparation Tips",
@@ -1043,45 +727,459 @@ private fun ConditionAdviceCard(
                     modifier = Modifier.padding(bottom = 8.dp)
                 )
                 recommendation.preparationTips.forEach { tip ->
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 4.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = diabetesColor.copy(alpha = 0.05f)
-                        ),
-                        border = BorderStroke(1.dp, diabetesColor.copy(alpha = 0.2f))
+                    PreparationTipCard(
+                        category = tip.category.replace('_', ' ').replaceFirstChar { it.uppercase() },
+                        description = tip.description,
+                        color = diabetesColor
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AdviceCardSection(
+    title: String,
+    content: String,
+    color: Color
+) {
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface // Changed to surface for better contrast
+        ),
+        border = BorderStroke(1.dp, color.copy(alpha = 0.3f)) // Added subtle border
+    ) {
+        Column(
+            modifier = Modifier
+                .padding(12.dp)
+                .weight(1f)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(color.copy(alpha = 0.1f)) // Light background for header
+                    .clip(RoundedCornerShape(8.dp)) // Clipped background for header
+                    .padding(horizontal = 8.dp, vertical = 4.dp)
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = color
+                )
+            }
+            Spacer(modifier = Modifier.height(8.dp)) // Spacing between header and content
+            Text(
+                text = content,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
+    }
+}
+
+@Composable
+private fun BenefitCard(
+    category: String,
+    strength: String,
+    description: String,
+    color: Color,
+    isConcern: Boolean = false
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface // Changed to surface for better contrast
+        ),
+        border = BorderStroke(1.dp, if (isConcern) MaterialTheme.colorScheme.error.copy(alpha = 0.3f) else color.copy(alpha = 0.3f)), // Added subtle border
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = category,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = if (isConcern) MaterialTheme.colorScheme.error else color
+                )
+                Text(
+                    text = strength,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = if (isConcern) MaterialTheme.colorScheme.onError else MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(if (isConcern) MaterialTheme.colorScheme.error else color)
+                        .padding(horizontal = 8.dp, vertical = 2.dp)
+                )
+            }
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = description,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant // Changed color for description
+            )
+        }
+    }
+}
+
+@Composable
+private fun PreparationTipCard(
+    category: String,
+    description: String,
+    color: Color
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface // Changed to surface for better contrast
+        ),
+        border = BorderStroke(1.dp, color.copy(alpha = 0.3f)), // Added subtle border
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            verticalAlignment = Alignment.Top
+        ) {
+            Icon(
+                imageVector = Icons.Default.Lightbulb,
+                contentDescription = null,
+                tint = color,
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = category,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = color,
+                    modifier = Modifier.padding(bottom = 4.dp)
+                )
+                Text(
+                    text = description,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant // Changed color for description
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun AlternativesComparisonSection(
+    originalFood: FoodItem,
+    alternatives: List<FoodItem>,
+    diabetesType: String?,
+    onAlternativeClick: (FoodItem) -> Unit
+) {
+    val diabetesColor = when (diabetesType?.lowercase()) {
+        "diabetes type 1", "type 1" -> MaterialTheme.colorScheme.primary
+        "diabetes type 2", "type 2" -> MaterialTheme.colorScheme.secondary
+        else -> MaterialTheme.colorScheme.primary
+    }
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        // Removed duplicate "Smart Alternatives" text
+
+        if (alternatives.isEmpty()) {
+            Card(
+                colors = CardDefaults.cardColors(
+                    containerColor = diabetesColor.copy(alpha = 0.05f)
+                ),
+                border = BorderStroke(1.dp, diabetesColor.copy(alpha = 0.2f)),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.QuestionMark,
+                        contentDescription = null,
+                        tint = diabetesColor,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text(
+                        text = "No alternatives available for this food.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            }
+            return
+        }
+
+        Card(
+            shape = RoundedCornerShape(16.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surface // Changed to surface for better contrast
+            ),
+            border = BorderStroke(1.dp, diabetesColor.copy(alpha = 0.3f)) // Added subtle border
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(diabetesColor.copy(alpha = 0.1f)) // Light background for header
+                        .clip(RoundedCornerShape(12.dp)) // Clipped background for header
+                        .padding(horizontal = 12.dp, vertical = 8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Restaurant,
+                        contentDescription = null,
+                        tint = diabetesColor,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Comparison Table",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = diabetesColor
+                    )
+                }
+                Spacer(modifier = Modifier.height(12.dp)) // Spacing between header and content
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = "Food",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.weight(1.2f)
+                    )
+                    Text(
+                        text = "Calories",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.weight(0.8f)
+                    )
+                    Text(
+                        text = "Carbs",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.weight(0.8f)
+                    )
+                    Text(
+                        text = "Advantage",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.weight(1.2f)
+                    )
+                }
+                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
+                alternatives.forEach { alternative ->
+                    val advantage = diabetesType?.let { dt ->
+                        val normalizedKey = normalizeConditionKey(dt)
+                        val recommendation = originalFood.recommendations[normalizedKey]
+                        recommendation?.alternatives?.find { it.foodId == alternative.id }?.advantage
+                            ?: "Better alternative"
+                    } ?: "Better alternative"
+
+                    AlternativeItemCard(
+                        foodName = alternative.name,
+                        calories = alternative.calories,
+                        carbs = alternative.totalCarbohydrates,
+                        advantage = advantage,
+                        diabetesColor = diabetesColor
                     ) {
-                        Row(
-                            modifier = Modifier.padding(12.dp),
-                            verticalAlignment = Alignment.Top
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Lightbulb,
-                                contentDescription = null,
-                                tint = diabetesColor,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = tip.category.replace('_', ' ').replaceFirstChar { it.uppercase() },
-                                    style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = diabetesColor,
-                                    modifier = Modifier.padding(bottom = 4.dp)
-                                )
-                                Text(
-                                    text = tip.description,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                            }
-                        }
+                        onAlternativeClick(alternative)
                     }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun AlternativeItemCard(
+    foodName: String,
+    calories: Int,
+    carbs: Double,
+    advantage: String,
+    diabetesColor: Color,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 6.dp)
+            .clickable { onClick() },
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface // Changed to surface for better contrast
+        ),
+        border = BorderStroke(1.dp, diabetesColor.copy(alpha = 0.2f)) // Added subtle border
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = foodName,
+                modifier = Modifier.weight(1.2f),
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = "$calories",
+                modifier = Modifier.weight(0.8f),
+                textAlign = TextAlign.Center,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                text = "${carbs.toInt()}g",
+                modifier = Modifier.weight(0.8f),
+                textAlign = TextAlign.Center,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                text = advantage,
+                modifier = Modifier.weight(1.2f),
+                textAlign = TextAlign.Center,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = diabetesColor
+            )
+        }
+    }
+}
+
+
+@Composable
+private fun NutritionalHighlight(label: String, value: String) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.padding(horizontal = 4.dp)
+    ) {
+        Text(
+            text = value,
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+@Composable
+private fun SafetyRatingDisplay(safetyRating: String, reasoning: String? = null) {
+    val (ratingBackgroundColor, ratingTextColor) = when (safetyRating.lowercase()) {
+        "avoid" -> MaterialTheme.colorScheme.errorContainer to MaterialTheme.colorScheme.onErrorContainer
+        "caution", "moderate" -> MaterialTheme.colorScheme.tertiaryContainer to MaterialTheme.colorScheme.onTertiaryContainer
+        "good" -> MaterialTheme.colorScheme.primaryContainer to MaterialTheme.colorScheme.onPrimaryContainer
+        else -> MaterialTheme.colorScheme.surfaceVariant to MaterialTheme.colorScheme.onSurfaceVariant
+    }
+
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), // Changed container color
+        shape = RoundedCornerShape(16.dp),
+        modifier = Modifier.fillMaxWidth(),
+        border = BorderStroke(1.dp, ratingBackgroundColor.copy(alpha = 0.3f)) // Added subtle border
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            // Safety Level Header with dynamic color
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp)) // Rounded corners for header
+                    .background(ratingBackgroundColor) // Use dynamic color
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "Safety: $safetyRating",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = ratingTextColor, // Use dynamic text color
+                    fontWeight = FontWeight.Bold
+                )
+            }
+            if (reasoning != null) {
+                Spacer(modifier = Modifier.height(12.dp))
+                // Reasoning Section with different background
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.1f) // Different background
+                    ),
+                    shape = RoundedCornerShape(12.dp), // Rounded corners for assessment
+                    modifier = Modifier.fillMaxWidth(),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.2f)) // Added subtle border
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Text(
+                            text = "Assessment",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant, // Different text color
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.padding(bottom = 4.dp)
+                        )
+                        Text(
+                            text = reasoning,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant // Different text color
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun NutritionalRow(label: String, value: String) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 6.dp),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant // Changed color for less emphasis
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyLarge,
+            fontWeight = FontWeight.Medium,
+            color = MaterialTheme.colorScheme.onSurface // Changed color for value
+        )
     }
 }
 
@@ -1093,7 +1191,6 @@ private fun HealthImpactChip(impactType: String, impactLevel: String) {
         "low", "negative" -> MaterialTheme.colorScheme.errorContainer to MaterialTheme.colorScheme.onErrorContainer
         else -> MaterialTheme.colorScheme.surfaceVariant to MaterialTheme.colorScheme.onSurfaceVariant
     }
-
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
@@ -1118,60 +1215,7 @@ private fun HealthImpactChip(impactType: String, impactLevel: String) {
     }
 }
 
-@Composable
-private fun ComparisonRow(
-    foodName: String,
-    calories: Int,
-    carbs: Double,
-    advantage: String,
-    isOriginal: Boolean,
-    diabetesType: String?,
-    onClick: () -> Unit
-) {
-    val diabetesColor = when (diabetesType?.lowercase()) {
-        "diabetes type 1", "type 1" -> MaterialTheme.colorScheme.primary
-        "diabetes type 2", "type 2" -> MaterialTheme.colorScheme.secondary
-        else -> MaterialTheme.colorScheme.onSurface
-    }
-
-    val clickableModifier = if (!isOriginal) Modifier.clickable { onClick() } else Modifier
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 8.dp)
-            .then(clickableModifier),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            text = foodName,
-            modifier = Modifier.weight(1.2f),
-            style = MaterialTheme.typography.bodyLarge,
-            fontWeight = if (isOriginal) FontWeight.Bold else FontWeight.Normal,
-            color = if (isOriginal) diabetesColor else MaterialTheme.colorScheme.onSurface
-        )
-        Text(
-            text = "$calories",
-            modifier = Modifier.weight(0.8f),
-            textAlign = TextAlign.Center,
-            style = MaterialTheme.typography.bodyLarge
-        )
-        Text(
-            text = "${carbs.toInt()}g",
-            modifier = Modifier.weight(0.8f),
-            textAlign = TextAlign.Center,
-            style = MaterialTheme.typography.bodyLarge
-        )
-        Text(
-            text = advantage,
-            modifier = Modifier.weight(1.2f),
-            textAlign = TextAlign.Center,
-            style = MaterialTheme.typography.bodyLarge,
-            color = if (isOriginal) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface
-        )
-    }
-}
-
+// --- Helper Functions (Unchanged) ---
 private fun getSafetyRating(foodItem: FoodItem, diabetesType: String?): String {
     if (diabetesType == null) return "Unknown"
     val key = normalizeConditionKey(diabetesType)
@@ -1185,7 +1229,6 @@ private fun getSafetyReasoning(foodItem: FoodItem, diabetesType: String?): Strin
     val recommendation = foodItem.recommendations[key] ?: return null
     return recommendation.reasoning
 }
-
 
 private fun normalizeConditionKey(condition: String): String {
     return when (condition.lowercase()) {

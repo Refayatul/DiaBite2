@@ -107,7 +107,7 @@ fun NavHostApp(authViewModel: AuthViewModel = hiltViewModel()) {
         }
 
         composable<Route.FoodDetail>() {
-            FoodDetailScreen(navController = navController)
+            FoodDetailScreen(onBackClick = { navController.navigateUp() })
         }
 
         composable<Route.TypeInfo>() {
