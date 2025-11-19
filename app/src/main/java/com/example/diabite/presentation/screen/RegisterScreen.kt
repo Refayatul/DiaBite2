@@ -94,10 +94,7 @@ fun RegisterScreen(navController: NavController, viewModel: AuthViewModel) {
 
     val diabetesTypes = listOf(
         "Diabetes Type 1",
-        "Diabetes Type 2",
-        "Prediabetes",
-        "Gestational Diabetes",
-        "Other"
+        "Diabetes Type 2"
     )
 
     val context = LocalContext.current

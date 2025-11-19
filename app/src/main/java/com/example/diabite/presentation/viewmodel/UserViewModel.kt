@@ -4,13 +4,11 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.diabite.data.model.User
 import com.example.diabite.domain.repository.AuthRepository
-import com.example.diabite.util.Resource
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -22,7 +20,6 @@ class UserViewModel @Inject constructor(
     private val _user = MutableStateFlow<User?>(null)
     val user: StateFlow<User?> = _user.asStateFlow()
 
-    // Derived state flows for UI convenience
     private val _favoriteFoodIds = MutableStateFlow<List<String>>(emptyList())
     val favoriteFoodIds: StateFlow<List<String>> = _favoriteFoodIds.asStateFlow()
 
@@ -45,38 +42,86 @@ class UserViewModel @Inject constructor(
                 .collect { user ->
                     _user.value = user
                     _favoriteFoodIds.value = user?.favoriteFoodIds ?: emptyList()
-                    _searchHistory.value = user?.searchHistory ?: emptyList()
+                    // FIX: Make sure the history is displayed in reverse chronological order
+                    _searchHistory.value = user?.searchHistory?.reversed() ?: emptyList()
                 }
         }
     }
 
     fun clearSearchHistory() {
         viewModelScope.launch {
+            // Optimistic UI update
+            _searchHistory.value = emptyList()
             _isClearingHistory.value = true
             authRepository.clearSearchHistory().collect { result ->
                 _isClearingHistory.value = false
-                // The local state will be updated via observeUserChanges
+                // If this failed, the next observeUser will bring the old history back,
+                // which is a reasonable fallback.
             }
         }
     }
 
     fun addSearchToHistory(query: String) {
         viewModelScope.launch {
+            // Optimistic UI update
+            val currentHistory = _searchHistory.value.toMutableList()
+            currentHistory.remove(query) // Remove if exists to add it to the top
+            currentHistory.add(0, query)
+            _searchHistory.value = currentHistory
+
             authRepository.addSearchToHistory(query).collect { result ->
-                // The local state will be updated via observeUser
+                when (result) {
+                    is com.example.diabite.util.Resource.Error -> {
+                        // Revert optimistic update on error
+                        val revertHistory = _searchHistory.value.toMutableList()
+                        revertHistory.remove(query)
+                        _searchHistory.value = revertHistory
+                    }
+                    else -> {
+                        // Success - the Firestore listener will update the UI with the latest data
+                        // No need to do anything here as observeUser() will handle the update
+                    }
+                }
             }
         }
     }
 
     fun toggleFavoriteFood(foodId: String) {
         viewModelScope.launch {
-            if (_favoriteFoodIds.value.contains(foodId)) {
-                authRepository.removeFavoriteFood(foodId).collect { result ->
-                    // The local state will be updated via observeUser
-                }
+            val currentFavorites = _favoriteFoodIds.value.toMutableList()
+            val wasFavorite = currentFavorites.contains(foodId)
+
+            // Optimistic UI update
+            if (wasFavorite) {
+                currentFavorites.remove(foodId)
             } else {
-                authRepository.addFavoriteFood(foodId).collect { result ->
-                    // The local state will be updated via observeUser
+                currentFavorites.add(foodId)
+            }
+            _favoriteFoodIds.value = currentFavorites
+
+            // Backend call
+            val result = if (wasFavorite) {
+                authRepository.removeFavoriteFood(foodId)
+            } else {
+                authRepository.addFavoriteFood(foodId)
+            }
+
+            result.collect { resource ->
+                when (resource) {
+                    is com.example.diabite.util.Resource.Error -> {
+                        // Revert optimistic update on error
+                        val revertFavorites = _favoriteFoodIds.value.toMutableList()
+                        if (wasFavorite) {
+                            revertFavorites.add(foodId) // Add back if removal failed
+                        } else {
+                            revertFavorites.remove(foodId) // Remove if addition failed
+                        }
+                        _favoriteFoodIds.value = revertFavorites
+                    }
+                    else -> {
+                        // Success - the Firestore listener will update the UI with the latest data
+                        // No need to do anything here as observeUser() will handle the update
+                    }
                 }
             }
         }
