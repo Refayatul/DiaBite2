@@ -16,6 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.example.diabite.common.Route
 import com.example.diabite.presentation.home_screen.HomeScreen
@@ -25,8 +26,9 @@ import com.example.diabite.presentation.screen.LoginScreen
 import com.example.diabite.presentation.screen.RegisterScreen
 import com.example.diabite.presentation.screen.SearchScreen
 import com.example.diabite.presentation.screen.SettingsScreen
-import com.example.diabite.presentation.screen.TypeInfoUI
 import com.example.diabite.presentation.viewmodel.AuthViewModel
+import com.example.diabite.presentation.viewmodel.SearchViewModel
+import com.example.diabite.presentation.viewmodel.UserViewModel
 import com.example.diabite.util.Resource
 import kotlinx.coroutines.delay
 
@@ -37,7 +39,11 @@ import kotlinx.coroutines.delay
 @Composable
 fun NavHostApp(authViewModel: AuthViewModel = hiltViewModel()) {
     val navController = rememberNavController()
-    val authState by authViewModel.authState.collectAsState()
+    val navBackStackEntry by navController.currentBackStackEntryAsState()
+    val authState by authViewModel.authState.collectAsState() 
+
+    val userViewModel = hiltViewModel<UserViewModel>()
+    val searchViewModel = hiltViewModel<SearchViewModel>()
 
     var showLoading by remember { mutableStateOf(true) }
 
@@ -48,9 +54,12 @@ fun NavHostApp(authViewModel: AuthViewModel = hiltViewModel()) {
 
     // Derived states to prevent unnecessary navigation on user updates
     val isAuthenticated by remember(authState) {
+        // Safely check for Resource.Success and non-null data
         derivedStateOf { authState is Resource.Success && authState.data != null }
     }
+    
     val isUnauthenticated by remember(authState) {
+        // Derived state to check for a successful but logged-out state
         derivedStateOf { authState is Resource.Success && authState.data == null }
     }
 
@@ -70,13 +79,14 @@ fun NavHostApp(authViewModel: AuthViewModel = hiltViewModel()) {
     }
 
     LaunchedEffect(isAuthenticated) {
-        if (isAuthenticated) {
+        if (isAuthenticated && navBackStackEntry?.destination?.route != Route.Home) { 
             navController.navigate(Route.Home) {
                 popUpTo(Route.Login) { inclusive = true }
             }
         }
     }
 
+    // RE-INTRODUCED: Reactive effect to navigate to Login when auth state explicitly becomes unauthenticated (e.g., after logout)
     LaunchedEffect(isUnauthenticated) {
         if (isUnauthenticated) {
             navController.navigate(Route.Login) {
@@ -89,43 +99,45 @@ fun NavHostApp(authViewModel: AuthViewModel = hiltViewModel()) {
         navController = navController,
         startDestination = startDestination,
     ) {
-        composable<Route.Login>() {
-            LoginScreen(navController = navController)
+        composable(Route.Login) {
+            LoginScreen(navController = navController, viewModel = authViewModel)
         }
-        composable<Route.Signup>() {
+        composable(Route.Signup) {
             RegisterScreen(navController = navController, viewModel = authViewModel)
         }
 
-        composable<Route.Home>() {
-            HomeScreen(navController = navController, authViewModel = authViewModel)
+        composable(Route.Home) {
+            HomeScreen(navController = navController, authViewModel = authViewModel, userViewModel = userViewModel)
         }
 
-        composable<Route.SearchFood>() {
+        composable("${Route.SearchFood}/{query}") { backStackEntry ->
+            val query = backStackEntry.arguments?.getString("query") ?: ""
             SearchScreen(
                 onFoodItemClick = { foodItem ->
-                    navController.navigate(Route.FoodDetail(foodItem.id))
-                }
+                    navController.navigate("${Route.FoodDetail}/${foodItem.id}")
+                },
+                viewModel = searchViewModel,
+                userViewModel = userViewModel
             )
         }
 
-        composable<Route.FoodDetail>() {
+        composable("${Route.FoodDetail}/{foodId}") { backStackEntry ->
+            val foodId = backStackEntry.arguments?.getString("foodId") ?: ""
             FoodDetailScreen(onBackClick = { navController.navigateUp() })
         }
 
-        composable<Route.TypeInfo>() {
-            TypeInfoUI(navController = navController)
-        }
-
-        composable<Route.AISuggestions>() {
+        composable(Route.AISuggestions) {
             AISuggestionsUI(navController = navController)
         }
 
-        composable<Route.Settings>() {
-            SettingsScreen(navController = navController)
+        composable(Route.Settings) {
+            SettingsScreen(navController = navController, authViewModel = authViewModel)
         }
 
-        composable<Route.Detail>() {
-            HomeScreen(navController = navController)
+        composable("${Route.Detail}/{name}/{email}") { backStackEntry ->
+            val name = backStackEntry.arguments?.getString("name") ?: ""
+            val email = backStackEntry.arguments?.getString("email") ?: ""
+            HomeScreen(navController = navController, authViewModel = authViewModel, userViewModel = userViewModel)
         }
     }
 }

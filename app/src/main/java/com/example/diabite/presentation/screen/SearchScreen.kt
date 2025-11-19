@@ -1,5 +1,12 @@
 package com.example.diabite.presentation.screen
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.scaleIn
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -19,11 +26,14 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -38,7 +48,9 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -47,12 +59,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.diabite.data.model.FoodItem
 import com.example.diabite.presentation.viewmodel.SearchViewModel
 
@@ -60,7 +73,8 @@ import com.example.diabite.presentation.viewmodel.SearchViewModel
 @Composable
 fun SearchScreen(
     onFoodItemClick: (FoodItem) -> Unit,
-    viewModel: SearchViewModel = hiltViewModel()
+    viewModel: SearchViewModel,
+    userViewModel: com.example.diabite.presentation.viewmodel.UserViewModel
 ) {
     val searchQuery by viewModel.searchQuery.collectAsState()
     val searchResults by viewModel.searchResults.collectAsState()
@@ -69,6 +83,7 @@ fun SearchScreen(
     val error by viewModel.error.collectAsState()
     val isEmptyState by viewModel.isEmptyState.collectAsState()
     val isDiabetesTypeMissing by viewModel.isDiabetesTypeMissing.collectAsState()
+    val favoriteFoodIds by userViewModel.favoriteFoodIds.collectAsState()
 
     val focusManager = LocalFocusManager.current
 
@@ -80,65 +95,132 @@ fun SearchScreen(
         )
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Search Foods") }
-            )
-        }
-    ) { padding ->
-        Column(
+    var visible by remember { mutableStateOf(false) }
+    // Trigger initial animation
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        visible = true
+    }
+
+    // Extract colors outside Canvas
+    val backgroundColor = MaterialTheme.colorScheme.background
+    val primaryColor = MaterialTheme.colorScheme.primary
+    val secondaryColor = MaterialTheme.colorScheme.secondary
+
+    // Background Canvas for subtle decorative elements (e.g., floating circles)
+    Box(
+        modifier = Modifier.fillMaxSize()
+    ) {
+        // Decorative Canvas (subtle, behind content)
+        Canvas(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
-                .padding(16.dp)
+                .background(backgroundColor)
         ) {
-            // Search Bar
-            SearchBar(
-                query = searchQuery,
-                onQueryChange = { viewModel.updateSearchQuery(it) },
-                onSearch = { focusManager.clearFocus() },
-                onClear = { viewModel.clearSearch() }
+            val width = size.width
+            val height = size.height
+            val radius = 60.dp.toPx()
+
+            // Draw some subtle, semi-transparent circles
+            drawCircle(
+                color = primaryColor.copy(alpha = 0.03f),
+                radius = radius,
+                center = Offset(width * 0.8f, height * 0.1f)
             )
+            drawCircle(
+                color = secondaryColor.copy(alpha = 0.03f),
+                radius = radius * 0.8f,
+                center = Offset(width * 0.2f, height * 0.9f)
+            )
+        }
 
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Content Area
-            when {
-                error != null -> {
-                    ErrorState(
-                        error = error!!,
-                        onRetry = { viewModel.retrySearch() }
+        Scaffold(
+            topBar = {
+                TopAppBar(
+                    title = {
+                        Text(
+                            "Search Foods",
+                            style = MaterialTheme.typography.headlineMedium.copy(
+                                fontWeight = FontWeight.ExtraBold
+                            ),
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surface
+                    )
+                )
+            }
+        ) { padding ->
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .padding(horizontal = 16.dp, vertical = 8.dp) // Reduced vertical padding
+            ) {
+                // Search Bar
+                AnimatedVisibility(
+                    visible = visible,
+                    enter = scaleIn(animationSpec = tween(500)) + fadeIn(animationSpec = tween(500))
+                ) {
+                    SearchBar(
+                        query = searchQuery,
+                        onQueryChange = { viewModel.updateSearchQuery(it) },
+                        onSearch = {
+                            if (searchQuery.isNotBlank()) {
+                                userViewModel.addSearchToHistory(searchQuery)
+                            }
+                            focusManager.clearFocus()
+                        },
+                        onClear = { viewModel.clearSearch() }
                     )
                 }
-                isLoading -> {
-                    LoadingState()
-                }
-                searchQuery.isBlank() -> {
-                    if (searchHistory.isNotEmpty()) {
-                        RecentSearchesSection(
-                            searches = searchHistory,
-                            onSearchClick = { viewModel.searchFromHistory(it) },
-                            onClearHistory = { viewModel.clearSearchHistory() }
-                        )
-                    } else {
-                        EmptyState(
-                            title = "Search for Foods",
-                            message = "Enter a food name to search our database"
-                        )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Content Area
+                AnimatedVisibility(
+                    visible = visible,
+                    enter = scaleIn(animationSpec = tween(600)) + fadeIn(animationSpec = tween(600))
+                ) {
+                    when {
+                        error != null -> {
+                            ErrorState(
+                                error = error!!,
+                                onRetry = { viewModel.retrySearch() }
+                            )
+                        }
+                        isLoading -> {
+                            LoadingState()
+                        }
+                        searchQuery.isBlank() -> {
+                            if (searchHistory.isNotEmpty()) {
+                                RecentSearchesSection(
+                                    searches = searchHistory,
+                                    onSearchClick = { viewModel.searchFromHistory(it) },
+                                    onClearHistory = { viewModel.clearSearchHistory() }
+                                )
+                            } else {
+                                EmptyState(
+                                    title = "Search for Foods",
+                                    message = "Enter a food name to search our database"
+                                )
+                            }
+                        }
+                        isEmptyState -> {
+                            EmptyState(
+                                title = "No Results Found",
+                                message = "Try a different search term or check your spelling"
+                            )
+                        }
+                        else -> {
+                            SearchResultsSection(
+                                results = searchResults,
+                                onFoodItemClick = onFoodItemClick,
+                                favoriteFoodIds = favoriteFoodIds,
+                                onFavoriteClick = { userViewModel.toggleFavoriteFood(it) }
+                            )
+                        }
                     }
-                }
-                isEmptyState -> {
-                    EmptyState(
-                        title = "No Results Found",
-                        message = "Try a different search term or check your spelling"
-                    )
-                }
-                else -> {
-                    SearchResultsSection(
-                        results = searchResults,
-                        onFoodItemClick = onFoodItemClick
-                    )
                 }
             }
         }
@@ -177,7 +259,14 @@ fun DiabetesTypeSelectionDialog(
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .menuAnchor()
+                            .menuAnchor(),
+                        colors = TextFieldDefaults.colors( // Custom colors for dropdown
+                            focusedIndicatorColor = MaterialTheme.colorScheme.primary,
+                            unfocusedIndicatorColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            focusedLabelColor = MaterialTheme.colorScheme.primary,
+                            unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            cursorColor = MaterialTheme.colorScheme.primary
+                        )
                     )
                     ExposedDropdownMenu(
                         expanded = expanded,
@@ -199,7 +288,11 @@ fun DiabetesTypeSelectionDialog(
         confirmButton = {
             Button(
                 onClick = { onTypeSelected(selectedOption) },
-                enabled = selectedOption.isNotEmpty()
+                enabled = selectedOption.isNotEmpty(),
+                colors = ButtonDefaults.buttonColors( // Custom button color
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary
+                )
             ) {
                 Text("Save & Continue")
             }
@@ -222,7 +315,8 @@ private fun SearchBar(
         leadingIcon = {
             Icon(
                 imageVector = Icons.Default.Search,
-                contentDescription = "Search"
+                contentDescription = "Search",
+                tint = MaterialTheme.colorScheme.primary // Colored icon
             )
         },
         trailingIcon = {
@@ -230,7 +324,8 @@ private fun SearchBar(
                 IconButton(onClick = onClear) {
                     Icon(
                         imageVector = Icons.Default.Clear,
-                        contentDescription = "Clear search"
+                        contentDescription = "Clear search",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant // Colored icon
                     )
                 }
             }
@@ -242,7 +337,16 @@ private fun SearchBar(
             onSearch = { onSearch() }
         ),
         singleLine = true,
-        shape = RoundedCornerShape(28.dp)
+        shape = RoundedCornerShape(28.dp),
+        colors = TextFieldDefaults.colors( // Custom colors for search bar
+            focusedIndicatorColor = MaterialTheme.colorScheme.primary,
+            unfocusedIndicatorColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            focusedLabelColor = MaterialTheme.colorScheme.primary,
+            unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            cursorColor = MaterialTheme.colorScheme.primary,
+            focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.1f), // Subtle background when focused
+            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.05f) // Subtle background when unfocused
+        )
     )
 }
 
@@ -304,7 +408,13 @@ private fun ErrorState(
                 textAlign = TextAlign.Center
             )
             Spacer(modifier = Modifier.height(24.dp))
-            Button(onClick = onRetry) {
+            Button(
+                onClick = onRetry,
+                colors = ButtonDefaults.buttonColors( // Custom button color
+                    containerColor = MaterialTheme.colorScheme.error,
+                    contentColor = MaterialTheme.colorScheme.onError
+                )
+            ) {
                 Text("Try Again")
             }
         }
@@ -329,12 +439,14 @@ private fun EmptyState(
                 imageVector = Icons.Default.Search,
                 contentDescription = null,
                 modifier = Modifier.size(64.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f) // Colored icon
             )
             Spacer(modifier = Modifier.height(16.dp))
             Text(
                 text = title,
-                style = MaterialTheme.typography.headlineSmall,
+                style = MaterialTheme.typography.headlineSmall.copy(
+                    fontWeight = FontWeight.Bold
+                ),
                 color = MaterialTheme.colorScheme.onSurface
             )
             Spacer(modifier = Modifier.height(8.dp))
@@ -354,6 +466,8 @@ private fun RecentSearchesSection(
     onSearchClick: (String) -> Unit,
     onClearHistory: () -> Unit
 ) {
+    var showClearDialog by remember { mutableStateOf(false) }
+
     Column {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -362,14 +476,18 @@ private fun RecentSearchesSection(
         ) {
             Text(
                 text = "Recent Searches",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold
+                style = MaterialTheme.typography.titleLarge.copy( // Larger title
+                    fontWeight = FontWeight.ExtraBold,
+                    color = MaterialTheme.colorScheme.primary
+                )
             )
             Text(
                 text = "Clear All",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.clickable { onClearHistory() }
+                style = MaterialTheme.typography.bodyMedium.copy( // Styled clear button
+                    fontWeight = FontWeight.Medium
+                ),
+                color = MaterialTheme.colorScheme.error, // Error color for clear action
+                modifier = Modifier.clickable { showClearDialog = true }
             )
         }
 
@@ -384,6 +502,33 @@ private fun RecentSearchesSection(
             }
         }
     }
+
+    // Clear History Confirmation Dialog
+    if (showClearDialog) {
+        AlertDialog(
+            onDismissRequest = { showClearDialog = false },
+            title = { Text("Clear Search History") },
+            text = { Text("Are you sure you want to clear all your search history? This action cannot be undone.") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showClearDialog = false
+                        onClearHistory()
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error
+                    )
+                ) {
+                    Text("Clear All")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
 }
 
 @Composable
@@ -391,38 +536,65 @@ private fun RecentSearchItem(
     searchQuery: String,
     onClick: () -> Unit
 ) {
-    Row(
+    val scale by animateFloatAsState(
+        targetValue = 1f,
+        animationSpec = tween(durationMillis = 200),
+        label = "scale"
+    )
+
+    Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onClick() }
-            .padding(vertical = 12.dp, horizontal = 4.dp),
-        verticalAlignment = Alignment.CenterVertically
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .clickable { onClick() },
+        shape = MaterialTheme.shapes.medium, // Use theme shape
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface // Standard surface color
+        )
     ) {
-        Icon(
-            imageVector = Icons.Default.History,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(20.dp)
-        )
-        Spacer(modifier = Modifier.width(12.dp))
-        Text(
-            text = searchQuery,
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurface
-        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Default.History,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary, // Colored icon
+                modifier = Modifier.size(24.dp)
+            )
+            Spacer(modifier = Modifier.width(16.dp))
+            Text(
+                text = searchQuery,
+                style = MaterialTheme.typography.bodyLarge.copy(
+                    fontWeight = FontWeight.Medium // Slightly bolder text
+                ),
+                color = MaterialTheme.colorScheme.onSurface, // Standard content color
+                modifier = Modifier.weight(1f)
+            )
+        }
     }
 }
 
 @Composable
 private fun SearchResultsSection(
     results: List<FoodItem>,
-    onFoodItemClick: (FoodItem) -> Unit
+    onFoodItemClick: (FoodItem) -> Unit,
+    favoriteFoodIds: List<String>,
+    onFavoriteClick: (String) -> Unit
 ) {
     Column {
         Text(
             text = "${results.size} results found",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            style = MaterialTheme.typography.bodyMedium.copy( // Styled count text
+                fontWeight = FontWeight.SemiBold
+            ),
+            color = MaterialTheme.colorScheme.primary
         )
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -433,7 +605,9 @@ private fun SearchResultsSection(
             items(results) { foodItem ->
                 FoodItemCard(
                     foodItem = foodItem,
-                    onClick = { onFoodItemClick(foodItem) }
+                    onClick = { onFoodItemClick(foodItem) },
+                    onFavoriteClick = onFavoriteClick,
+                    isFavorite = favoriteFoodIds.contains(foodItem.id)
                 )
             }
         }
@@ -443,21 +617,65 @@ private fun SearchResultsSection(
 @Composable
 private fun FoodItemCard(
     foodItem: FoodItem,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onFavoriteClick: (String) -> Unit,
+    isFavorite: Boolean
 ) {
+    val scale by animateFloatAsState(
+        targetValue = 1f,
+        animationSpec = tween(durationMillis = 200),
+        label = "scale"
+    )
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
             .clickable { onClick() },
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        shape = RoundedCornerShape(12.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp), // Increased elevation
+        shape = RoundedCornerShape(16.dp) // More rounded corners
     ) {
         Column(
             modifier = Modifier.padding(16.dp)
         ) {
-            Text(text = foodItem.name, style = MaterialTheme.typography.titleMedium)
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(text = "${foodItem.calories} kcal", style = MaterialTheme.typography.bodyMedium)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top
+            ) {
+                Column(
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(
+                        text = foodItem.name,
+                        style = MaterialTheme.typography.titleLarge.copy( // Larger title
+                            fontWeight = FontWeight.Bold
+                        ),
+                        color = MaterialTheme.colorScheme.onSurface // Standard content color
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "${foodItem.calories} kcal",
+                        style = MaterialTheme.typography.bodyMedium.copy( // Styled kcal text
+                            fontWeight = FontWeight.Medium
+                        ),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant // Variant color for less emphasis
+                    )
+                }
+                IconButton(
+                    onClick = { onFavoriteClick(foodItem.id) },
+                    modifier = Modifier.size(24.dp)
+                ) {
+                    Icon(
+                        imageVector = if (isFavorite) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
+                        contentDescription = if (isFavorite) "Remove from favorites" else "Add to favorites",
+                        tint = if (isFavorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
         }
     }
 }

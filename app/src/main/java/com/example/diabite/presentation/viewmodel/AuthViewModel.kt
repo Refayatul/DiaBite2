@@ -239,6 +239,11 @@ class AuthViewModel @Inject constructor(
                         _currentUser.value = null
                         _authState.value = Resource.success(null) // Update auth state for navigation
                         _logoutState.value = Resource.success(Unit)
+                        // --- FIX: Reset login/signup states to prevent auto-navigation ---
+                        _loginState.value = Resource.loading()
+                        _googleSignInState.value = Resource.loading()
+                        _signUpState.value = Resource.loading()
+                        clearRegistrationData()
                     }
                         is Resource.Error -> {
                             Timber.e(resource.error?.cause, "Logout failed")

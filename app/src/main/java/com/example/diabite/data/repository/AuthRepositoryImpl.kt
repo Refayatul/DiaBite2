@@ -230,17 +230,37 @@ class AuthRepositoryImpl @Inject constructor(
                 emit(Resource.success(Unit))
                 return@flow
             }
-            
+
             val userDocRef = firestore.collection("users").document(uid)
-            
+
             // Remove if exists then add to front
             userDocRef.update("searchHistory", FieldValue.arrayRemove(query)).await()
             userDocRef.update("searchHistory", FieldValue.arrayUnion(query)).await()
-            
+
             emit(Resource.success(Unit))
         } catch (e: Exception) {
             Timber.w(e, "Failed to add search to history")
             emit(Resource.success(Unit))
+        }
+    }
+
+    override fun clearSearchHistory(): Flow<Resource<Unit>> = flow {
+        emit(Resource.loading())
+        try {
+            val uid = firebaseAuth.currentUser?.uid
+            if (uid == null) {
+                emit(Resource.success(Unit))
+                return@flow
+            }
+
+            firestore.collection("users").document(uid)
+                .update("searchHistory", emptyList<String>())
+                .await()
+
+            emit(Resource.success(Unit))
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to clear search history")
+            emit(Resource.firebaseError(e))
         }
     }
 

@@ -21,7 +21,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -263,54 +262,41 @@ private fun FoodHeader(foodItem: FoodItem, diabetesType: String?) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp), // Kept horizontal padding consistent
+            .padding(horizontal = 16.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
         shape = RoundedCornerShape(20.dp),
         // CHANGED: Use the standard surface color instead of a variant
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface 
+            containerColor = MaterialTheme.colorScheme.surface // Use surface color
         )
     ) {
         Column(
             modifier = Modifier.padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Food Icon
-            Box(
+            // Category Tag (Optional: if you want to keep it visible)
+            Text(
+                text = foodItem.category.replaceFirstChar { it.uppercase() },
+                style = MaterialTheme.typography.labelLarge, // Changed style for tag
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary, // Use primary color for category
                 modifier = Modifier
-                    .size(96.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primaryContainer),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Restaurant,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(48.dp)
-                )
-            }
-            Spacer(modifier = Modifier.height(20.dp))
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)) // Subtle background for tag
+                    .padding(horizontal = 12.dp, vertical = 4.dp)
+            )
+            Spacer(modifier = Modifier.height(8.dp)) // Reduced space after tag
 
-            // Food Name
+            // Food Name with dynamic color
             Text(
                 text = foodItem.name,
                 style = MaterialTheme.typography.headlineLarge,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface, // Ensure text color is correct
+                fontWeight = FontWeight.ExtraBold, // Made bolder
+                color = MaterialTheme.colorScheme.onSurface, // Use standard surface color for name
                 textAlign = TextAlign.Center,
                 maxLines = 2
             )
-            Spacer(modifier = Modifier.height(4.dp))
-
-            // Category
-            Text(
-                text = foodItem.category.replaceFirstChar { it.uppercase() },
-                style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.primary, // Ensure text color is correct
-                textAlign = TextAlign.Center
-            )
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(8.dp)) // Reduced space after name
 
             // Nutritional Highlights
             Row(

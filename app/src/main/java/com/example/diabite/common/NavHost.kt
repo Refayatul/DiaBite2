@@ -25,8 +25,9 @@ import com.example.diabite.presentation.screen.LoginScreen
 import com.example.diabite.presentation.screen.RegisterScreen
 import com.example.diabite.presentation.screen.SearchScreen
 import com.example.diabite.presentation.screen.SettingsScreen
-import com.example.diabite.presentation.screen.TypeInfoUI
 import com.example.diabite.presentation.viewmodel.AuthViewModel
+import com.example.diabite.presentation.viewmodel.SearchViewModel
+import com.example.diabite.presentation.viewmodel.UserViewModel
 import com.example.diabite.util.Resource
 
 /**
@@ -37,6 +38,9 @@ import com.example.diabite.util.Resource
 fun NavHostApp(authViewModel: AuthViewModel = hiltViewModel()) {
     val navController = rememberNavController()
     val authState by authViewModel.authState.collectAsState()
+
+    val userViewModel = hiltViewModel<UserViewModel>()
+    val searchViewModel = hiltViewModel<SearchViewModel>()
 
     // Derived states to prevent unnecessary navigation on user updates
     val isAuthenticated by remember(authState) {
@@ -85,46 +89,48 @@ fun NavHostApp(authViewModel: AuthViewModel = hiltViewModel()) {
         startDestination = startDestination,
     ) {
         // Authentication Screens
-        composable<Route.Login>() {
-            LoginScreen(navController = navController)
+        composable(Route.Login) {
+            LoginScreen(navController = navController, viewModel = authViewModel)
         }
-        composable<Route.Signup>() {
+        composable(Route.Signup) {
             RegisterScreen(navController = navController, viewModel = authViewModel)
         }
 
         // Main App Screens (Protected Routes)
-        composable<Route.Home>() {
-            HomeScreen(navController = navController, authViewModel = authViewModel)
+        composable(Route.Home) {
+            HomeScreen(navController = navController, authViewModel = authViewModel, userViewModel = userViewModel)
         }
 
         // Feature Screens
-        composable<Route.SearchFood>() {
+        composable("${Route.SearchFood}/{query}") { backStackEntry ->
+            val query = backStackEntry.arguments?.getString("query") ?: ""
             SearchScreen(
                 onFoodItemClick = { foodItem ->
-                    navController.navigate(Route.FoodDetail(foodItem.id))
-                }
+                    navController.navigate("${Route.FoodDetail}/${foodItem.id}")
+                },
+                viewModel = searchViewModel,
+                userViewModel = userViewModel
             )
         }
 
-        composable<Route.FoodDetail>() {
+        composable("${Route.FoodDetail}/{foodId}") { backStackEntry ->
+            val foodId = backStackEntry.arguments?.getString("foodId") ?: ""
             FoodDetailScreen(onBackClick = { navController.navigateUp() })
         }
 
-        composable<Route.TypeInfo>() {
-            TypeInfoUI(navController = navController)
-        }
-
-        composable<Route.AISuggestions>() {
+        composable(Route.AISuggestions) {
             AISuggestionsUI(navController = navController)
         }
 
-        composable<Route.Settings>() {
-            SettingsScreen(navController = navController)
+        composable(Route.Settings) {
+            SettingsScreen(navController = navController, authViewModel = authViewModel)
         }
 
         // Legacy route for backward compatibility
-        composable<Route.Detail>() {
-            HomeScreen(navController = navController, authViewModel = authViewModel)
+        composable("${Route.Detail}/{name}/{email}") { backStackEntry ->
+            val name = backStackEntry.arguments?.getString("name") ?: ""
+            val email = backStackEntry.arguments?.getString("email") ?: ""
+            HomeScreen(navController = navController, authViewModel = authViewModel, userViewModel = userViewModel)
         }
     }
 }

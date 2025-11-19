@@ -1,7 +1,16 @@
 package com.example.diabite.presentation.home_screen
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.scaleIn
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -10,10 +19,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.History
@@ -40,17 +52,22 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
@@ -63,6 +80,7 @@ import com.example.diabite.presentation.screen.HistoryScreenUI
 import com.example.diabite.presentation.viewmodel.AuthViewModel
 import com.example.diabite.presentation.viewmodel.UserViewModel
 
+// Sealed class for bottom navigation items (unchanged)
 sealed class BottomNavItem(
     val route: String,
     val title: String,
@@ -76,7 +94,7 @@ sealed class BottomNavItem(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HomeScreen(navController: NavHostController, authViewModel: AuthViewModel = hiltViewModel(), userViewModel: UserViewModel = hiltViewModel()) {
+fun HomeScreen(navController: NavHostController, authViewModel: AuthViewModel, userViewModel: UserViewModel) {
     val bottomNavController = rememberNavController()
     val showLogoutDialog = remember { mutableStateOf(false) }
 
@@ -86,13 +104,13 @@ fun HomeScreen(navController: NavHostController, authViewModel: AuthViewModel = 
         topBar = {
             TopAppBar(
                 title = { Text("DiaBite", color = MaterialTheme.colorScheme.onPrimaryContainer) },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
                 actions = {
                     IconButton(onClick = { navController.navigate(Route.Settings) }) {
-                        Icon(imageVector = Icons.Filled.Settings, contentDescription = "Settings", tint = MaterialTheme.colorScheme.primary)
+                        Icon(imageVector = Icons.Filled.Settings, contentDescription = "Settings", tint = MaterialTheme.colorScheme.onPrimaryContainer)
                     }
                     IconButton(onClick = { showLogoutDialog.value = true }) {
-                        Icon(imageVector = Icons.AutoMirrored.Filled.ExitToApp, contentDescription = "Logout", tint = MaterialTheme.colorScheme.primary)
+                        Icon(imageVector = Icons.AutoMirrored.Filled.ExitToApp, contentDescription = "Logout", tint = MaterialTheme.colorScheme.onPrimaryContainer)
                     }
                 }
             )
@@ -135,12 +153,12 @@ fun HomeScreen(navController: NavHostController, authViewModel: AuthViewModel = 
             }
             composable(BottomNavItem.History.route) {
                 HistoryScreenUI(viewModel = userViewModel) { query ->
-                    navController.navigate(Route.SearchFood(query))
+                    navController.navigate("${Route.SearchFood}/$query")
                 }
             }
             composable(BottomNavItem.Favourite.route) {
                 FavouriteScreenUI(viewModel = userViewModel) { foodId ->
-                    navController.navigate(Route.FoodDetail(foodId))
+                    navController.navigate("${Route.FoodDetail}/$foodId")
                 }
             }
         }
@@ -156,6 +174,10 @@ fun HomeScreen(navController: NavHostController, authViewModel: AuthViewModel = 
                     onClick = {
                         showLogoutDialog.value = false
                         authViewModel.logout()
+                        navController.navigate(Route.Login) {
+                            // FIX: Use popUpTo(0) for absolute stack clearing, consistent with NavHostApp
+                            popUpTo(0) { inclusive = true }
+                        }
                     }
                 ) { Text("Sign Out", color = MaterialTheme.colorScheme.error) }
             },
@@ -166,65 +188,234 @@ fun HomeScreen(navController: NavHostController, authViewModel: AuthViewModel = 
 
 @Composable
 fun HomeScreenUI(name: String, email: String, mainNavController: NavController) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
+    val scrollState = rememberScrollState()
+    var visible by remember { mutableStateOf(false) }
+
+    // Extract colors outside Canvas
+    val backgroundColor = MaterialTheme.colorScheme.background
+    val primaryColor = MaterialTheme.colorScheme.primary
+    val secondaryColor = MaterialTheme.colorScheme.secondary
+
+    // Background Canvas for subtle decorative elements (e.g., floating circles)
+    Box(
+        modifier = Modifier.fillMaxSize()
     ) {
-        Spacer(modifier = Modifier.height(32.dp))
-        Text(text = "Welcome, $name!", style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary), textAlign = TextAlign.Center)
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(text = "What would you like to do today?", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Spacer(modifier = Modifier.height(48.dp))
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
-            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
-            onClick = { mainNavController.navigate(Route.SearchFood("")) }
+        // Trigger initial animation *inside* the content of the Box
+        LaunchedEffect(Unit) {
+            visible = true
+        }
+
+        // Decorative Canvas (subtle, behind content)
+        Canvas(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(backgroundColor)
         ) {
-            Column(
-                modifier = Modifier.fillMaxWidth().padding(24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
+            val width = size.width
+            val height = size.height
+            val radius = 80.dp.toPx()
+
+            // Draw some subtle, semi-transparent circles
+            drawCircle(
+                color = primaryColor.copy(alpha = 0.05f),
+                radius = radius,
+                center = Offset(width * 0.8f, height * 0.2f)
+            )
+            drawCircle(
+                color = secondaryColor.copy(alpha = 0.05f),
+                radius = radius * 0.7f,
+                center = Offset(width * 0.2f, height * 0.8f)
+            )
+        }
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(scrollState)
+                .padding(horizontal = 16.dp, vertical = 16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            // Welcome Section
+            AnimatedVisibility(
+                visible = visible,
+                enter = scaleIn(animationSpec = tween(500)) + fadeIn(animationSpec = tween(500))
             ) {
-                Icon(imageVector = Icons.Filled.Search, contentDescription = "Search Food", modifier = Modifier.size(64.dp), tint = MaterialTheme.colorScheme.primary)
-                Spacer(modifier = Modifier.height(16.dp))
-                Text(text = "Search Food", style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary))
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(text = "Get personalized safety advice for any food", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onPrimaryContainer, textAlign = TextAlign.Center)
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 32.dp)
+                ) {
+                    // Add a small decorative element before the text
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.primary)
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Text(
+                        text = "Welcome, $name!",
+                        style = MaterialTheme.typography.headlineLarge.copy(
+                            fontWeight = FontWeight.ExtraBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        ),
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "What would you like to do today?",
+                        style = MaterialTheme.typography.titleLarge.copy(
+                            fontWeight = FontWeight.Medium
+                        ),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center
+                    )
+                }
             }
-        }
-        Spacer(modifier = Modifier.height(24.dp))
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
-            onClick = { mainNavController.navigate(Route.AISuggestions) }
-        ) {
-            Column(
-                modifier = Modifier.fillMaxSize().padding(16.dp),
-                verticalArrangement = Arrangement.Center,
-                horizontalAlignment = Alignment.Start
+
+            // Feature Cards Section
+            AnimatedVisibility(
+                visible = visible,
+                enter = scaleIn(animationSpec = tween(600)) + fadeIn(animationSpec = tween(600))
             ) {
-                Text(text = "✨ Want AI Suggestions?", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.onSecondaryContainer)
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(text = "Let our AI suggest personalized meal ideas for you.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSecondaryContainer)
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(24.dp)
+                ) {
+                    // Search Card
+                    FeatureCard(
+                        title = "\uD83D\uDD0D Search Food",
+                        description = "Get personalized safety advice for any food",
+                        icon = Icons.Filled.Search,
+                        iconColor = MaterialTheme.colorScheme.primary,
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                        onClick = {
+                            mainNavController.navigate("${Route.SearchFood}/")
+                        }
+                    )
+
+                    // AI Suggestions Card
+                    FeatureCard(
+                        title = "\uD83E\uDD16 AI Meal Suggestions",
+                        description = "Let our AI suggest personalized meal ideas for you.",
+                        icon = Icons.Filled.SmartToy,
+                        iconColor = MaterialTheme.colorScheme.secondary,
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                        onClick = {
+                            mainNavController.navigate(Route.AISuggestions)
+                        }
+                    )
+                }
             }
         }
-        Spacer(modifier = Modifier.height(24.dp))
-        Card(
-            modifier = Modifier.fillMaxWidth().clickable { mainNavController.navigate(Route.TypeInfo) },
-            shape = RoundedCornerShape(12.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+    }
+}
+
+@Composable
+fun FeatureCard(
+    title: String,
+    description: String,
+    icon: ImageVector,
+    iconColor: Color,
+    containerColor: Color,
+    contentColor: Color,
+    onClick: () -> Unit
+) {
+    // Animate the scale based on visibility state (if passed down) or a local state if needed for press effects
+    val scale by animateFloatAsState(
+        targetValue = 1f,
+        animationSpec = tween(
+            durationMillis = 200
+        ),
+        label = "cardScale"
+    )
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            // .graphicsLayer {
+            //     scaleX = scale
+            //     scaleY = scale
+            // }
+            .scale(scale)
+            .clickable {
+                onClick()
+            },
+        shape = RoundedCornerShape(24.dp),
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = 8.dp
+        ),
+        colors = CardDefaults.cardColors(
+            containerColor = containerColor
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(24.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(modifier = Modifier.padding(16.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Icon(imageVector = Icons.Filled.SmartToy, contentDescription = "Info Icon", modifier = Modifier.size(28.dp).padding(end = 8.dp), tint = MaterialTheme.colorScheme.primary)
-                Text(text = "Click here to read about Diabetes Types", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold), color = MaterialTheme.colorScheme.onSurface)
+            // Icon Container with Border
+            Box(
+                modifier = Modifier
+                    .size(72.dp) // Slightly larger icon container
+                    .clip(RoundedCornerShape(20.dp)) // Match card shape more closely
+                    .background(
+                        contentColor.copy(
+                            alpha = 0.1f
+                        )
+                    )
+                    .border(
+                        width = 1.dp,
+                        color = iconColor.copy(
+                            alpha = 0.3f
+                        ),
+                        shape = RoundedCornerShape(20.dp)
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    modifier = Modifier.size(36.dp), // Slightly larger icon
+                    tint = iconColor
+                )
             }
+            Spacer(modifier = Modifier.width(20.dp)) // Increased space
+            // Text Content
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleLarge.copy(
+                        fontWeight = FontWeight.Bold
+                    ),
+                    color = iconColor // Title color matches icon
+                )
+                Spacer(modifier = Modifier.height(6.dp)) // Increased space
+                Text(
+                    text = description,
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        fontWeight = FontWeight.Normal
+                    ),
+                    color = contentColor.copy(
+                        alpha = 0.9f
+                    ) // Slightly less transparent content color
+                )
+            }
+            // Chevron Icon
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                contentDescription = "Navigate",
+                tint = contentColor.copy(
+                    alpha = 0.7f
+                ) // Slightly more prominent navigation icon
+            )
         }
-        Spacer(modifier = Modifier.height(32.dp))
     }
 }

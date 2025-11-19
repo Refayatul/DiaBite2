@@ -101,8 +101,18 @@ class SearchViewModel @Inject constructor(
             currentUser?.let { user ->
                 val updatedUser = user.copy(diabetesType = type)
                 authRepository.updateUserProfile(updatedUser).collect { result ->
-                    if (result is Resource.Error) {
-                        _error.value = "Failed to update profile: ${result.error?.userMessage}"
+                    when (result) {
+                        is Resource.Success -> {
+                            // Explicitly update state to dismiss dialog immediately
+                            _userDiabetesType.value = type
+                            _isDiabetesTypeMissing.value = false
+                        }
+                        is Resource.Error -> {
+                            _error.value = "Failed to update profile: ${result.error?.userMessage}"
+                        }
+                        else -> {
+                            // Handle Loading if needed
+                        }
                     }
                 }
             }
@@ -155,9 +165,13 @@ class SearchViewModel @Inject constructor(
 
     fun clearSearchHistory() {
         viewModelScope.launch {
-            // To be implemented: Delete history from Firestore subcollection
-            // For now, just clear local state
-            _searchHistory.value = emptyList()
+            authRepository.clearSearchHistory().collect { result ->
+                if (result is Resource.Success) {
+                    // History cleared successfully from Firebase, local state will be updated via observeUserChanges
+                } else if (result is Resource.Error) {
+                    _error.value = "Failed to clear search history: ${result.error?.userMessage}"
+                }
+            }
         }
     }
 
