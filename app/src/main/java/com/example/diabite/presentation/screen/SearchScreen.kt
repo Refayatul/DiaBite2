@@ -78,7 +78,7 @@ fun SearchScreen(
 ) {
     val searchQuery by viewModel.searchQuery.collectAsState()
     val searchResults by viewModel.searchResults.collectAsState()
-    val searchHistory by viewModel.searchHistory.collectAsState()
+    val searchHistory by userViewModel.searchHistory.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val error by viewModel.error.collectAsState()
     val isEmptyState by viewModel.isEmptyState.collectAsState()

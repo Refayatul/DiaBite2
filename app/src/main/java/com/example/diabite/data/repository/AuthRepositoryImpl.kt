@@ -233,9 +233,23 @@ class AuthRepositoryImpl @Inject constructor(
 
             val userDocRef = firestore.collection("users").document(uid)
 
-            // Remove if exists then add to front
-            userDocRef.update("searchHistory", FieldValue.arrayRemove(query)).await()
-            userDocRef.update("searchHistory", FieldValue.arrayUnion(query)).await()
+            // Get current search history
+            val userDoc = userDocRef.get().await()
+            val currentHistory = userDoc.get("searchHistory") as? List<String> ?: emptyList()
+
+            // Create new history with query at the beginning (most recent first)
+            val newHistory = mutableListOf<String>()
+            newHistory.add(query) // Add to front
+            // Add other items, excluding the current query if it exists elsewhere
+            newHistory.addAll(currentHistory.filter { it != query })
+
+            // Limit history to reasonable size (e.g., 50 items)
+            if (newHistory.size > 50) {
+                newHistory.subList(50, newHistory.size).clear()
+            }
+
+            // Update the entire field
+            userDocRef.update("searchHistory", newHistory).await()
 
             emit(Resource.success(Unit))
         } catch (e: Exception) {

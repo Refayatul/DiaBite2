@@ -8,7 +8,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -36,14 +36,11 @@ class UserViewModel @Inject constructor(
     private fun observeUser() {
         viewModelScope.launch {
             authRepository.getCurrentUser()
-                .catch {
-                    // In a real app, you might want to log this error
-                }
-                .collect { user ->
+                .collectLatest { user ->
                     _user.value = user
                     _favoriteFoodIds.value = user?.favoriteFoodIds ?: emptyList()
-                    // FIX: Make sure the history is displayed in reverse chronological order
-                    _searchHistory.value = user?.searchHistory?.reversed() ?: emptyList()
+                    // Search history is now stored in chronological order (most recent first)
+                    _searchHistory.value = user?.searchHistory ?: emptyList()
                 }
         }
     }
