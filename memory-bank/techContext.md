@@ -46,7 +46,8 @@
 - **Firebase Authentication**: Email/password + Google Sign-In
 - **Firebase Firestore**: Real-time database with offline support
 - **Firebase Analytics**: Usage analytics and crash reporting
-- **Gemini AI**: AI-powered food analysis and recommendations
+- **Gemini AI 2.0**: AI-powered food analysis and recommendations (using gemini-2.5-flash-lite model)
+  - **Note**: Gemini 1.5 models are deprecated as of November 2025. Use Gemini 2.0 or 2.5 models flash lite for new implementations.
 - **Firebase Security Rules**: Granular access control for data security
 
 ### Additional Libraries

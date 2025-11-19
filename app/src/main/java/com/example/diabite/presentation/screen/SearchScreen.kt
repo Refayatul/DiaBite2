@@ -82,6 +82,8 @@ fun SearchScreen(
     val isLoading by viewModel.isLoading.collectAsState()
     val error by viewModel.error.collectAsState()
     val isEmptyState by viewModel.isEmptyState.collectAsState()
+    val canDoAISearch by viewModel.canDoAISearch.collectAsState()
+    val aiInProgress by viewModel.aiInProgress.collectAsState()
     val isDiabetesTypeMissing by viewModel.isDiabetesTypeMissing.collectAsState()
     val favoriteFoodIds by userViewModel.favoriteFoodIds.collectAsState()
 
@@ -182,43 +184,63 @@ fun SearchScreen(
                     visible = visible,
                     enter = scaleIn(animationSpec = tween(600)) + fadeIn(animationSpec = tween(600))
                 ) {
-                    when {
-                        error != null -> {
-                            ErrorState(
-                                error = error!!,
-                                onRetry = { viewModel.retrySearch() }
-                            )
-                        }
-                        isLoading -> {
-                            LoadingState()
-                        }
-                        searchQuery.isBlank() -> {
-                            if (searchHistory.isNotEmpty()) {
-                                RecentSearchesSection(
-                                    searches = searchHistory,
-                                    onSearchClick = { viewModel.searchFromHistory(it) },
-                                    onClearHistory = { viewModel.clearSearchHistory() }
-                                )
-                            } else {
-                                EmptyState(
-                                    title = "Search for Foods",
-                                    message = "Enter a food name to search our database"
-                                )
+                    Column {
+                        // AI progress banner
+                        val aiVisible = canDoAISearch && (aiInProgress || isLoading && canDoAISearch)
+                        AnimatedVisibility(visible = aiVisible) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.06f))
+                                    .padding(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.primary)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(text = "AI analysis in progress...", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
                             }
                         }
-                        isEmptyState -> {
-                            EmptyState(
-                                title = "No Results Found",
-                                message = "Try a different search term or check your spelling"
-                            )
-                        }
-                        else -> {
-                            SearchResultsSection(
-                                results = searchResults,
-                                onFoodItemClick = onFoodItemClick,
-                                favoriteFoodIds = favoriteFoodIds,
-                                onFavoriteClick = { userViewModel.toggleFavoriteFood(it) }
-                            )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        when {
+                            error != null -> {
+                                ErrorState(
+                                    error = error!!,
+                                    onRetry = { viewModel.retrySearch() }
+                                )
+                            }
+                            isLoading -> {
+                                LoadingState(showAiHint = canDoAISearch)
+                            }
+                            searchQuery.isBlank() -> {
+                                if (searchHistory.isNotEmpty()) {
+                                    RecentSearchesSection(
+                                        searches = searchHistory,
+                                        onSearchClick = { viewModel.searchFromHistory(it) },
+                                        onClearHistory = { viewModel.clearSearchHistory() }
+                                    )
+                                } else {
+                                    EmptyState(
+                                        title = "Search for Foods",
+                                        message = "Enter a food name to search our database"
+                                    )
+                                }
+                            }
+                            isEmptyState -> {
+                                EmptyState(
+                                    title = "No Results Found",
+                                    message = "Try a different search term or check your spelling"
+                                )
+                            }
+                            else -> {
+                                SearchResultsSection(
+                                    results = searchResults,
+                                    onFoodItemClick = onFoodItemClick,
+                                    favoriteFoodIds = favoriteFoodIds,
+                                    onFavoriteClick = { userViewModel.toggleFavoriteFood(it) }
+                                )
+                            }
                         }
                     }
                 }
@@ -351,7 +373,7 @@ private fun SearchBar(
 }
 
 @Composable
-private fun LoadingState() {
+private fun LoadingState(showAiHint: Boolean = false) {
     Box(
         modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.Center
@@ -366,7 +388,7 @@ private fun LoadingState() {
             )
             Spacer(modifier = Modifier.height(16.dp))
             Text(
-                text = "Searching...",
+                text = if (showAiHint) "Searching... If not found, analyzing with AI." else "Searching...",
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

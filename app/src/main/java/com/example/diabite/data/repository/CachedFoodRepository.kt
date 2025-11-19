@@ -7,6 +7,7 @@ import com.example.diabite.util.AppError
 import com.example.diabite.util.Resource
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.asStateFlow
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -17,12 +18,26 @@ class CachedFoodRepository @Inject constructor(
     private val geminiRepository: GeminiRepository
 ) : FoodRepository {
 
+    // Expose AI progress so ViewModel/UI can react to Gemini calls
+    private val _aiInProgress = kotlinx.coroutines.flow.MutableStateFlow(false)
+    val aiInProgress: kotlinx.coroutines.flow.StateFlow<Boolean> = _aiInProgress.asStateFlow()
+
     override fun searchFood(query: String, userConditions: List<String>, diabetesType: String?): Flow<Resource<List<FoodItem>>> = flow {
         emit(Resource.loading())
 
         try {
-            // First, search Firestore for existing foods
+            // 1) Check local cache first (fast)
+            val cached = cacheManager.searchCachedFoods(query)
+            if (cached.isNotEmpty()) {
+                // Return cached items immediately
+                emit(Resource.success(cached))
+                return@flow
+            }
+
+            // 2) Query Firestore
             val firestoreResult = firestoreRepository.searchFood(query, userConditions, diabetesType)
+
+            var foundInFirestore = false
 
             firestoreResult.collect { resource ->
                 when (resource) {
@@ -30,36 +45,77 @@ class CachedFoodRepository @Inject constructor(
                         val foods = resource.data ?: emptyList()
 
                         if (foods.isNotEmpty()) {
-                            // Found foods in Firestore - cache and return
+                            // Cache and return results
                             foods.forEach { food ->
                                 cacheManager.cacheFoodItemAsync(food)
                             }
                             emit(Resource.success(foods))
+                            foundInFirestore = true
                         } else {
-                            // No foods found in Firestore - try Gemini AI analysis
-                            emitGeminiAnalysisResult(query, userConditions, diabetesType)
+                            // No results in Firestore; will fallthrough to AI below
+                            emit(Resource.success(emptyList()))
                         }
                     }
                     is Resource.Error -> {
-                        // Firestore search failed - try Gemini as fallback
-                        emitGeminiAnalysisResult(query, userConditions, diabetesType)
+                        // Pass through the error but allow AI fallback
+                        emit(Resource.error(AppError.UnknownError("Search failed: ${resource.error?.userMessage ?: "unknown"}")))
                     }
                     is Resource.Loading -> {
-                        // Pass through loading state
                         emit(Resource.loading())
                     }
                 }
             }
+
+            // 3) If not found in Firestore or cache, call Gemini automatically and persist result
+            if (!foundInFirestore) {
+                try {
+                    // signal AI start
+                    _aiInProgress.value = true
+
+                    geminiRepository.analyzeFood(query, userConditions, diabetesType).collect { aiResource ->
+                        when (aiResource) {
+                            is Resource.Success -> {
+                                val item = aiResource.data
+                                if (item != null) {
+                                    // Persist to Firestore and cache for future searches
+                                    try {
+                                        firestoreRepository.saveFoodItem(item).collect {}
+                                    } catch (e: Exception) {
+                                        // Log/passthrough — persistence failure shouldn't block showing the result
+                                    }
+
+                                    cacheManager.cacheFoodItemAsync(item)
+                                    emit(Resource.success(listOf(item)))
+                                } else {
+                                    emit(Resource.success(emptyList()))
+                                }
+                            }
+                            is Resource.Error -> {
+                                emit(Resource.error(aiResource.error!!))
+                            }
+                            is Resource.Loading -> emit(Resource.loading())
+                        }
+                    }
+                } catch (e: Exception) {
+                    emit(Resource.error(AppError.fromException(e)))
+                } finally {
+                    // signal AI finished
+                    _aiInProgress.value = false
+                }
+            }
         } catch (e: Exception) {
-            // Try Gemini as last resort
-            emitGeminiAnalysisResult(query, userConditions, diabetesType)
+            emit(Resource.error(AppError.fromException(e)))
         }
     }
 
     /**
-     * Emit Gemini analysis result for a food query
+     * Search for food using AI analysis (manual trigger)
      */
-    private suspend fun kotlinx.coroutines.flow.FlowCollector<Resource<List<FoodItem>>>.emitGeminiAnalysisResult(query: String, userConditions: List<String>, diabetesType: String?) {
+    fun searchFoodWithAI(query: String, userConditions: List<String>, diabetesType: String?): Flow<Resource<List<FoodItem>>> = flow {
+        emit(Resource.loading())
+
+        // Perform AI analysis directly
+        _aiInProgress.value = true
         try {
             geminiRepository.analyzeFood(query, userConditions, diabetesType).collect { resource ->
                 when (resource) {
@@ -74,16 +130,17 @@ class CachedFoodRepository @Inject constructor(
                         }
                     }
                     is Resource.Error -> {
-                        emit(Resource.error(resource.error ?: AppError.UnknownError("AI analysis failed")))
+                        emit(Resource.error(resource.error!!)) // Pass through AI error
                     }
                     is Resource.Loading -> {
-                        // Could emit loading state if needed
                         emit(Resource.loading())
                     }
                 }
             }
         } catch (e: Exception) {
             emit(Resource.error(AppError.fromException(e)))
+        } finally {
+            _aiInProgress.value = false
         }
     }
 

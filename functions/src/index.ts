@@ -5,8 +5,20 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 // Initialize Firebase Admin
 admin.initializeApp();
 
-// Initialize Gemini AI
-const genAI = new GoogleGenerativeAI(functions.config().gemini?.api_key || process.env.GEMINI_API_KEY!);
+// Lazy initialize Gemini AI client to avoid throwing at import time
+let genAI: any | null = null;
+function getGenAI() {
+  if (genAI) return genAI;
+
+  const apiKey = functions.config().gemini?.api_key || process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    // Do not throw here (import time). Caller should catch and return friendly error.
+    throw new Error('GEMINI_API_KEY_MISSING');
+  }
+
+  genAI = new GoogleGenerativeAI(apiKey);
+  return genAI;
+}
 
 // Rate limiting storage (in production, use Redis or similar)
 const userRequestCounts = new Map<string, { count: number; resetTime: number }>();
@@ -375,7 +387,7 @@ export const geminiFoodAnalysis = functions
       // Check if food already exists in Firestore
       const firestore = admin.firestore();
       const existingFood = await firestore
-        .collection('foods')
+        .collection('foodItems')
         .where('normalizedName', '==', normalizedName)
         .limit(1)
         .get();
@@ -390,15 +402,71 @@ export const geminiFoodAnalysis = functions
         };
       }
 
-      // Call Gemini API
-      const model = genAI.getGenerativeModel({ model: 'gemini-pro' });
+      // Call Gemini API (initialize client lazily)
+      let client: any;
+      try {
+        client = getGenAI();
+      } catch (e: any) {
+        if (e.message === 'GEMINI_API_KEY_MISSING') {
+          throw new functions.https.HttpsError(
+            'failed-precondition',
+            'AI service not configured. Please set GEMINI_API_KEY in functions config or environment.'
+          );
+        }
+        throw e;
+      }
+
+      const model = client.getGenerativeModel({ model: 'gemini-2.5-flash-lite' });
       const prompt = createGeminiPrompt(foodName);
 
       console.log(`Calling Gemini API for food: ${foodName}`);
 
-      const result = await model.generateContent(prompt);
-      const response = await result.response;
-      const geminiResponse = response.text();
+      // Call Gemini API and robustly extract text from its response.
+      let result: any;
+      if (typeof model.generateContent === 'function') {
+        result = await model.generateContent(prompt);
+      } else if (typeof model.generate === 'function') {
+        result = await model.generate(prompt);
+      } else if (typeof client.generate === 'function') {
+        result = await client.generate({model: 'gemini-2.5-flash-lite', prompt});
+      } else {
+        throw new Error('Unsupported Gemini client API shape');
+      }
+
+      // Helper to extract text from various SDK response shapes
+      const extractResponseText = async (res: any): Promise<string> => {
+        try {
+          if (!res) return '';
+
+          // If SDK returns a Response-like object
+          if (typeof res.text === 'function') {
+            return await res.text();
+          }
+
+          // If SDK returns a promise that resolves to an object with .response
+          if (res.response && typeof res.response.text === 'function') {
+            return await res.response.text();
+          }
+
+          // Newer SDKs often return .output or .outputs arrays
+          if (Array.isArray(res.output) && res.output.length > 0) {
+            // join any text parts
+            return res.output.map((o: any) => o.content || o[0]?.text || '').join('\n').trim();
+          }
+
+          if (Array.isArray(res.outputs) && res.outputs.length > 0) {
+            return res.outputs.map((o: any) => o.content || o[0]?.text || '').join('\n').trim();
+          }
+
+          // Fallback to JSON stringify
+          return typeof res === 'string' ? res : JSON.stringify(res);
+        } catch (e) {
+          console.error('Failed extracting text from Gemini response', e);
+          return '';
+        }
+      };
+
+      const geminiResponse = await extractResponseText(result.response || result);
 
       console.log(`Gemini response received for ${foodName}`);
 
@@ -414,7 +482,7 @@ export const geminiFoodAnalysis = functions
 
       // Save to Firestore
       await firestore
-        .collection('foods')
+        .collection('foodItems')
         .doc(parsedData.id)
         .set({
           ...parsedData,

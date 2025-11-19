@@ -24,13 +24,18 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
+import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material.icons.outlined.FavoriteBorder
@@ -39,13 +44,16 @@ import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -68,6 +76,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
@@ -78,6 +87,8 @@ import com.example.diabite.common.Route
 import com.example.diabite.presentation.screen.FavouriteScreenUI
 import com.example.diabite.presentation.screen.HistoryScreenUI
 import com.example.diabite.presentation.viewmodel.AuthViewModel
+import com.example.diabite.presentation.viewmodel.GeminiViewModel
+import com.example.diabite.presentation.viewmodel.UiState
 import com.example.diabite.presentation.viewmodel.UserViewModel
 
 // Sealed class for bottom navigation items (unchanged)
@@ -190,6 +201,7 @@ fun HomeScreen(navController: NavHostController, authViewModel: AuthViewModel, u
 fun HomeScreenUI(name: String, email: String, mainNavController: NavController) {
     val scrollState = rememberScrollState()
     var visible by remember { mutableStateOf(false) }
+    var showChatDialog by remember { mutableStateOf(false) }
 
     // Extract colors outside Canvas
     val backgroundColor = MaterialTheme.colorScheme.background
@@ -311,7 +323,131 @@ fun HomeScreenUI(name: String, email: String, mainNavController: NavController) 
                 }
             }
         }
+
+        // Floating Action Button for AI Chat
+        FloatingActionButton(
+            onClick = { showChatDialog = true },
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(16.dp),
+            containerColor = MaterialTheme.colorScheme.tertiary,
+            contentColor = MaterialTheme.colorScheme.onTertiary
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Chat,
+                contentDescription = "AI Chat"
+            )
+        }
+
+        // AI Chat Dialog
+        if (showChatDialog) {
+            GeminiChatDialog(
+                onDismiss = { showChatDialog = false }
+            )
+        }
     }
+}
+
+@Composable
+fun GeminiChatDialog(
+    viewModel: GeminiViewModel = hiltViewModel(),
+    onDismiss: () -> Unit
+) {
+    val uiState by viewModel.uiState.collectAsState()
+    var promptText by remember { mutableStateOf("") }
+    val scrollState = rememberLazyListState()
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Chat with Gemini AI") },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(400.dp), // Fixed height for dialog
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // Chat messages area - scrollable
+                Card(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant
+                    )
+                ) {
+                    LazyColumn(
+                        state = scrollState,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        item {
+                            when (val state = uiState) {
+                                is UiState.Initial -> Text("Enter a prompt to start chatting with Gemini AI.")
+                                is UiState.Loading -> {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        CircularProgressIndicator(modifier = Modifier.size(16.dp))
+                                        Text("Gemini is thinking...")
+                                    }
+                                }
+                                is UiState.Success -> {
+                                    Text(
+                                        text = state.outputText,
+                                        style = MaterialTheme.typography.bodyMedium
+                                    )
+                                }
+                                is UiState.Error -> Text(
+                                    "Error: ${state.errorMessage}",
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Input field
+                OutlinedTextField(
+                    value = promptText,
+                    onValueChange = { promptText = it },
+                    label = { Text("Ask Gemini...") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = false,
+                    maxLines = 3,
+                    supportingText = {
+                        Text(
+                            text = "${promptText.length}/500",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    if (promptText.isNotBlank()) {
+                        viewModel.sendPrompt(promptText)
+                        promptText = "" // Clear input after sending
+                    }
+                },
+                enabled = uiState !is UiState.Loading && promptText.isNotBlank()
+            ) {
+                Icon(imageVector = Icons.Filled.Send, contentDescription = "Send")
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Send")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Close")
+            }
+        }
+    )
 }
 
 @Composable
@@ -336,10 +472,6 @@ fun FeatureCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            // .graphicsLayer {
-            //     scaleX = scale
-            //     scaleY = scale
-            // }
             .scale(scale)
             .clickable {
                 onClick()

@@ -42,32 +42,51 @@ class FirestoreFoodRepository @Inject constructor(
             // Combine userConditions and diabetesType for comprehensive filtering
             val allConditions = (userConditions + listOfNotNull(diabetesType)).distinct()
 
-            // Search with retry logic
+            // Search with retry logic - simplified approach
             val result = retryOperation {
-                // Search by normalized name (prefix matching)
-                val querySnapshot = foodCollection
-                    .whereGreaterThanOrEqualTo("normalizedName", normalizedQuery)
-                    .whereLessThanOrEqualTo("normalizedName", normalizedQuery + "\uf8ff")
-                    .limit(50)
+                // Get all foods and filter in memory (more reliable than complex queries)
+                val allFoodsQuery = foodCollection
+                    .limit(200) // Reasonable limit to avoid loading too much data
                     .get()
                     .await()
 
-                var foods = querySnapshot.documents.mapNotNull { document ->
+                val allFoods = allFoodsQuery.documents.mapNotNull { document ->
                     try {
                         document.toFoodItem()
                     } catch (e: Exception) {
-                        Timber.w(e, "Failed to parse food document")
-                        null // Skip malformed documents
+                        Timber.w(e, "Failed to parse food document: ${document.id}")
+                        null
                     }
                 }
 
-                // If no results with prefix search, try contains search (if supported by index or just skip)
-                // Note: Firestore doesn't strictly support "contains" without third-party search services like Algolia.
-                // We'll skip the array-contains search on "searchTokens" if it wasn't set up, relying on normalizedName.
+                // Filter foods that match the search query
+                var matchingFoods = allFoods.filter { food ->
+                    val foodName = food.name.lowercase()
+                    val foodNormalizedName = food.normalizedName.lowercase()
+
+                    // Match if query is contained in name or normalized name
+                    foodName.contains(normalizedQuery) ||
+                    foodNormalizedName.contains(normalizedQuery) ||
+                    // Also check if the food name starts with the query
+                    foodName.startsWith(normalizedQuery)
+                }
+
+                // Sort by relevance (exact matches first, then prefix matches, then contains)
+                matchingFoods = matchingFoods.sortedWith(compareByDescending { food ->
+                    val foodName = food.name.lowercase()
+                    when {
+                        foodName == normalizedQuery -> 3 // Exact match
+                        foodName.startsWith(normalizedQuery) -> 2 // Starts with
+                        else -> 1 // Contains
+                    }
+                })
+
+                // Limit results
+                matchingFoods = matchingFoods.take(50)
 
                 // If user conditions (including diabetesType) are provided, filter out explicitly unsafe foods
                 if (allConditions.isNotEmpty()) {
-                    foods = foods.filter { food ->
+                    matchingFoods = matchingFoods.filter { food ->
                         // The food is KEPT if it is NOT marked as 'bad' or 'avoid' for ANY condition
                         val isExplicitlyUnsafe = allConditions.any { condition ->
                             val recommendation = food.recommendations[condition]
@@ -79,7 +98,9 @@ class FirestoreFoodRepository @Inject constructor(
                         !isExplicitlyUnsafe // Keep food if it is NOT explicitly unsafe
                     }
                 }
-                foods
+
+                Timber.d("Search for '$query' found ${matchingFoods.size} results")
+                matchingFoods
             }
 
             emit(Resource.success(result))
@@ -289,6 +310,25 @@ class FirestoreFoodRepository @Inject constructor(
         } catch (e: Exception) {
             Timber.e(e, "Get personalized recommendations failed")
             emit(Resource.firebaseError(e))
+        }
+    }
+
+    /**
+     * Save or update a FoodItem into Firestore
+     */
+    fun saveFoodItem(food: FoodItem) = flow {
+        emit(Resource.loading<Boolean>())
+
+        try {
+            retryOperation {
+                // Use the food.id as the document id
+                foodCollection.document(food.id).set(food).await()
+            }
+
+            emit(Resource.success(true))
+        } catch (e: Exception) {
+            Timber.e(e, "Save food item failed")
+            emit(Resource.firebaseError<Boolean>(e))
         }
     }
 

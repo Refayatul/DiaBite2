@@ -26,6 +26,7 @@ import javax.inject.Inject
 @HiltViewModel
 class SearchViewModel @Inject constructor(
     private val foodRepository: FoodRepository,
+    private val cachedFoodRepository: com.example.diabite.data.repository.CachedFoodRepository,
     private val authRepository: AuthRepository,
     private val cacheManager: CacheManager,
     private val foodNormalizer: FoodNormalizer,
@@ -50,6 +51,9 @@ class SearchViewModel @Inject constructor(
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
+    private val _aiInProgress = MutableStateFlow(false)
+    val aiInProgress: StateFlow<Boolean> = _aiInProgress.asStateFlow()
+
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
 
@@ -59,7 +63,11 @@ class SearchViewModel @Inject constructor(
     // State to track if user needs to select a diabetes type
     private val _isDiabetesTypeMissing = MutableStateFlow(false)
     val isDiabetesTypeMissing: StateFlow<Boolean> = _isDiabetesTypeMissing.asStateFlow()
-    
+
+    // State to track if advanced AI search is available
+    private val _canDoAISearch = MutableStateFlow(false)
+    val canDoAISearch: StateFlow<Boolean> = _canDoAISearch.asStateFlow()
+
     // Current user object to update
     private var currentUser: User? = null
 
@@ -69,6 +77,15 @@ class SearchViewModel @Inject constructor(
 
         observeUserChanges()
         setupSearchFlow()
+        observeAiProgress()
+    }
+
+    private fun observeAiProgress() {
+        viewModelScope.launch {
+            cachedFoodRepository.aiInProgress.collect { inProgress ->
+                _aiInProgress.value = inProgress
+            }
+        }
     }
 
     private fun observeUserChanges() {
@@ -81,7 +98,7 @@ class SearchViewModel @Inject constructor(
                     _userDiabetesType.value = diabetesType
                     _userConditions.value = if (diabetesType.isNotEmpty()) listOf(diabetesType) else emptyList()
                     _searchHistory.value = user?.searchHistory?.reversed() ?: emptyList()
-                    
+
                     // Check if diabetes type is missing
                     _isDiabetesTypeMissing.value = user != null && diabetesType.isBlank()
                 }
@@ -90,6 +107,8 @@ class SearchViewModel @Inject constructor(
 
     fun updateSearchQuery(query: String) {
         _searchQuery.value = query
+        // Clear any previous errors when starting a new search
+        _error.value = null
         if (query.isBlank()) {
             _searchResults.value = emptyList()
             _isEmptyState.value = true
@@ -139,11 +158,15 @@ class SearchViewModel @Inject constructor(
                                 foodNormalizer.getSearchRelevanceScore(searchQuery.value, it.name)
                             }
                             _isEmptyState.value = foods.isEmpty()
+                            // Show AI search option if no results found in database
+                            _canDoAISearch.value = foods.isEmpty()
                         }
                         is Resource.Error -> {
                             _error.value = resource.error?.userMessage ?: "Search failed"
                             _searchResults.value = emptyList()
                             _isEmptyState.value = true
+                            // Allow AI search as fallback when database search fails
+                            _canDoAISearch.value = true
                         }
                         else -> Unit
                     }
@@ -185,5 +208,52 @@ class SearchViewModel @Inject constructor(
 
     fun searchFromHistory(query: String) {
         updateSearchQuery(query)
+    }
+
+    fun performAdvancedAISearch() {
+        val currentQuery = searchQuery.value
+        if (currentQuery.isNotBlank()) {
+            _isLoading.value = true
+            _error.value = null
+
+            viewModelScope.launch {
+                try {
+                    // Perform AI search directly using the repository method
+                    val aiResult = cachedFoodRepository.searchFoodWithAI(
+                        query = currentQuery,
+                        userConditions = _userConditions.value,
+                        diabetesType = _userDiabetesType.value
+                    )
+
+                    aiResult.collect { resource ->
+                        _isLoading.value = resource is Resource.Loading
+                        when (resource) {
+                            is Resource.Success -> {
+                                val foods = resource.data ?: emptyList()
+                                if (foods.isNotEmpty()) {
+                                    _searchResults.value = foodNormalizer.removeDuplicates(foods).sortedByDescending {
+                                        foodNormalizer.getSearchRelevanceScore(currentQuery, it.name)
+                                    }
+                                    _isEmptyState.value = false
+                                    _canDoAISearch.value = false
+                                } else {
+                                    _error.value = "No food information found"
+                                    _isEmptyState.value = true
+                                }
+                            }
+                            is Resource.Error -> {
+                                _error.value = resource.error?.userMessage ?: "AI search failed"
+                                _isEmptyState.value = true
+                            }
+                            else -> Unit
+                        }
+                    }
+                } catch (e: Exception) {
+                    _error.value = "AI search failed: ${e.localizedMessage ?: "Unknown error"}"
+                    _isLoading.value = false
+                    _isEmptyState.value = true
+                }
+            }
+        }
     }
 }

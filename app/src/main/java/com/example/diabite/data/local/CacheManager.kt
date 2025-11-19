@@ -145,6 +145,29 @@ class CacheManager @Inject constructor(
     }
 
     /**
+     * Search cached foods by a simple normalized name match.
+     * This is intentionally lightweight and best-effort — used before remote lookups.
+     */
+    suspend fun searchCachedFoods(query: String): List<FoodItem> {
+        return try {
+            if (query.isBlank()) return emptyList()
+
+            val normalizedQuery = query.lowercase().trim()
+            val all = foodDao.getAllCachedFoods()
+
+            all.mapNotNull { it.foodItem }
+                .filter { item ->
+                    val name = item.name.lowercase()
+                    val normalizedName = item.normalizedName.lowercase()
+                    name.contains(normalizedQuery) || normalizedName.contains(normalizedQuery)
+                }
+        } catch (e: Exception) {
+            println("CacheManager: Failed to search cache: ${e.message}")
+            emptyList()
+        }
+    }
+
+    /**
      * Periodic cleanup launcher
      */
     fun scheduleCleanup() {

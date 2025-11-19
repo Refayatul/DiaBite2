@@ -145,11 +145,7 @@ class AuthViewModel @Inject constructor(
         email: String,
         password: String,
         name: String, // Renamed
-      //  dateOfBirth: String = "", // Kept for signature compatibility but not used
-       // biologicalSex: String = "", // Kept for signature compatibility but not used
-       // primaryConditions: List<String> = emptyList(), // Kept for signature compatibility but not used
         diabetesType: String = "",
-        diabetesMedications: List<String> = emptyList() // Kept for signature compatibility but not used
     ) {
         // Forward to the simplified signUp
         signUp(email, password, name, diabetesType)

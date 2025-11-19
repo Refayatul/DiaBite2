@@ -47,7 +47,7 @@ timber = "5.0.1"
 gemini = "0.9.0"
 
 # Firebase
-firebaseBom = "34.5.0"
+firebaseBom = "34.6.0"
 googleServices = "4.4.4"
 
 # Background Work

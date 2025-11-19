@@ -10,6 +10,7 @@ object Route {
     const val SearchFood = "search_food"
     const val FoodDetail = "food_detail"
     const val AISuggestions = "ai_suggestions"
+    const val Gemini = "gemini"
     const val Settings = "settings"
     const val Detail = "detail"
 }

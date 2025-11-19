@@ -19,6 +19,7 @@ import com.example.diabite.common.Route
 import com.example.diabite.presentation.home_screen.HomeScreen
 import com.example.diabite.presentation.screen.AISuggestionsUI
 import com.example.diabite.presentation.screen.FoodDetailScreen
+import com.example.diabite.presentation.screen.GeminiScreen
 import com.example.diabite.presentation.screen.LoginScreen
 import com.example.diabite.presentation.screen.RegisterScreen
 import com.example.diabite.presentation.screen.SearchScreen
@@ -99,6 +100,10 @@ fun NavHostApp(authViewModel: AuthViewModel = hiltViewModel()) {
 
         composable(Route.AISuggestions) {
             AISuggestionsUI(navController = navController)
+        }
+
+        composable(Route.Gemini) {
+            GeminiScreen()
         }
 
         composable(Route.Settings) {
