@@ -8,15 +8,12 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
-import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.example.diabite.common.Route
 import com.example.diabite.presentation.home_screen.HomeScreen
@@ -30,36 +27,19 @@ import com.example.diabite.presentation.viewmodel.AuthViewModel
 import com.example.diabite.presentation.viewmodel.SearchViewModel
 import com.example.diabite.presentation.viewmodel.UserViewModel
 import com.example.diabite.util.Resource
-import kotlinx.coroutines.delay
 
-/**
- * The main entry point for the application's navigation.
- * It manages authentication state and navigates accordingly.
- */
 @Composable
 fun NavHostApp(authViewModel: AuthViewModel = hiltViewModel()) {
     val navController = rememberNavController()
-    val navBackStackEntry by navController.currentBackStackEntryAsState()
-    val authState by authViewModel.authState.collectAsState() 
+    val authState by authViewModel.authState.collectAsState()
 
     val userViewModel = hiltViewModel<UserViewModel>()
     val searchViewModel = hiltViewModel<SearchViewModel>()
 
-    var showLoading by remember { mutableStateOf(true) }
-
-    LaunchedEffect(Unit) {
-        delay(3000) // 3 second timeout
-        showLoading = false
-    }
-
-    // Derived states to prevent unnecessary navigation on user updates
     val isAuthenticated by remember(authState) {
-        // Safely check for Resource.Success and non-null data
         derivedStateOf { authState is Resource.Success && authState.data != null }
     }
-    
     val isUnauthenticated by remember(authState) {
-        // Derived state to check for a successful but logged-out state
         derivedStateOf { authState is Resource.Success && authState.data == null }
     }
 
@@ -68,7 +48,7 @@ fun NavHostApp(authViewModel: AuthViewModel = hiltViewModel()) {
         else -> Route.Login
     }
 
-    if (authState is Resource.Loading && showLoading) {
+    if (authState is Resource.Loading) {
         Box(
             modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.Center
@@ -78,15 +58,6 @@ fun NavHostApp(authViewModel: AuthViewModel = hiltViewModel()) {
         return
     }
 
-    LaunchedEffect(isAuthenticated) {
-        if (isAuthenticated && navBackStackEntry?.destination?.route != Route.Home) { 
-            navController.navigate(Route.Home) {
-                popUpTo(Route.Login) { inclusive = true }
-            }
-        }
-    }
-
-    // RE-INTRODUCED: Reactive effect to navigate to Login when auth state explicitly becomes unauthenticated (e.g., after logout)
     LaunchedEffect(isUnauthenticated) {
         if (isUnauthenticated) {
             navController.navigate(Route.Login) {
