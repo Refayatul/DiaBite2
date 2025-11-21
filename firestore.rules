@@ -3,15 +3,21 @@ service cloud.firestore {
   match /databases/{database}/documents {
     // Allow read/write for food items to all authenticated users
     match /foodItems/{item} {
-      allow read, write: if request.auth != null;
+      allow read: if request.auth != null;
+      allow write: if false; // Food items are read-only, managed by backend
     }
     
     // Users can only access their own data (including favoriteFoodIds and searchHistory root arrays)
     match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow update: if request.auth != null && request.auth.uid == userId;
+      allow create: if request.auth != null && request.auth.uid == userId;
+      allow delete: if false; // Prevent accidental user document deletion
+      
       // Allow reads/writes to any subcollections under users/{userId} for future use
       match /{document=**} {
-        allow read, write: if request.auth != null && request.auth.uid == userId;
+        allow read: if request.auth != null && request.auth.uid == userId;
+        allow write: if request.auth != null && request.auth.uid == userId;
       }
     }
     

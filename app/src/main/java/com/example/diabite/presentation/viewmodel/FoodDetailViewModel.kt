@@ -126,14 +126,14 @@ class FoodDetailViewModel @Inject constructor(
             try {
                 val uid = firebaseAuth.currentUser?.uid
                 if (uid != null) {
-                    val favoriteDoc = firestore.collection("users")
+                    val userDoc = firestore.collection("users")
                         .document(uid)
-                        .collection("favorites")
-                        .document(foodId)
                         .get()
                         .await()
 
-                    _isFavorite.value = favoriteDoc.exists()
+                    @Suppress("UNCHECKED_CAST")
+                    val favoriteIds = userDoc.get("favoriteFoodIds") as? List<String> ?: emptyList()
+                    _isFavorite.value = favoriteIds.contains(foodId)
                 }
             } catch (e: Exception) {
                 Timber.w(e, "Failed to check favorite status")

@@ -37,17 +37,10 @@ class UserViewModel @Inject constructor(
     private val _isClearingHistory = MutableStateFlow(false)
     val isClearingHistory: StateFlow<Boolean> = _isClearingHistory.asStateFlow()
 
-    private var favoritesListener: com.google.firebase.firestore.ListenerRegistration? = null
-    private var historyListener: com.google.firebase.firestore.ListenerRegistration? = null
+    private var userDocListener: com.google.firebase.firestore.ListenerRegistration? = null
 
     init {
         observeUser()
-
-        // Also set up listeners if user is already authenticated
-        val currentUser = firebaseAuth.currentUser
-        if (currentUser != null) {
-            setupSubcollectionListeners(currentUser.uid)
-        }
     }
 
     private fun observeUser() {
@@ -56,22 +49,30 @@ class UserViewModel @Inject constructor(
             val firebaseUser = firebaseAuth.currentUser
             if (firebaseUser == null) {
                 // User logged out
+                Timber.d("UserViewModel: User logged out")
                 _user.value = null
                 _favoriteFoodIds.value = emptyList()
                 _searchHistory.value = emptyList()
-                setupSubcollectionListeners(null)
+                userDocListener?.remove()
+                userDocListener = null
                 return@addAuthStateListener
             }
 
+            Timber.d("UserViewModel: User logged in: ${firebaseUser.uid}")
+            // Run migration for legacy favorites
+            migrateLegacyFavorites()
             // User logged in, set up listener on user document
             val userDocRef = firestore.collection("users").document(firebaseUser.uid)
-            userDocRef.addSnapshotListener { snapshot, error ->
+            
+            // Remove existing listener
+            userDocListener?.remove()
+            
+            userDocListener = userDocRef.addSnapshotListener { snapshot, error ->
                 if (error != null) {
                     Timber.w(error, "Listen for user profile failed.")
                     _user.value = null
                     _favoriteFoodIds.value = emptyList()
                     _searchHistory.value = emptyList()
-                    setupSubcollectionListeners(null)
                     return@addSnapshotListener
                 }
 
@@ -84,13 +85,19 @@ class UserViewModel @Inject constructor(
                     )
                     _user.value = user
 
-                    // Load data from user document (legacy support)
-                    _favoriteFoodIds.value = user.favoriteFoodIds
-                    _searchHistory.value = user.searchHistory
+                    // Load data directly from snapshot for real-time updates
+                    @Suppress("UNCHECKED_CAST")
+                    val favoriteIds = snapshot.get("favoriteFoodIds") as? List<String> ?: user.favoriteFoodIds
+                    @Suppress("UNCHECKED_CAST")
+                    val searchHistory = snapshot.get("searchHistory") as? List<String> ?: user.searchHistory
 
-                    // Set up listeners for the current user (will override with subcollection data if available)
-                    setupSubcollectionListeners(user.uid)
+                    Timber.d("UserViewModel: Updated favoriteFoodIds: $favoriteIds")
+                    Timber.d("UserViewModel: Updated searchHistory: $searchHistory")
+                    
+                    _favoriteFoodIds.value = favoriteIds
+                    _searchHistory.value = searchHistory
                 } else {
+                    Timber.d("UserViewModel: User document does not exist, creating default")
                     val defaultUser = User(
                         uid = firebaseUser.uid,
                         email = firebaseUser.email ?: "",
@@ -99,112 +106,55 @@ class UserViewModel @Inject constructor(
                     _user.value = defaultUser
                     _favoriteFoodIds.value = emptyList()
                     _searchHistory.value = emptyList()
-                    setupSubcollectionListeners(defaultUser.uid)
                 }
             }
-        }
-    }
-
-    private fun setupSubcollectionListeners(uid: String?) {
-        if (uid == null) {
-            // Remove existing listeners if user is null
-            favoritesListener?.remove()
-            favoritesListener = null
-            historyListener?.remove()
-            historyListener = null
-            return
-        }
-
-        Timber.d("UserViewModel: Setting up listeners for user $uid")
-
-        // Remove existing listeners
-        favoritesListener?.remove()
-        historyListener?.remove()
-
-        // First, check if there's existing data in user document that needs migration
-        migrateLegacyData(uid)
-
-        // Listen to favorites subcollection
-        val favoritesCollection = firestore.collection("users").document(uid).collection("favorites")
-        favoritesListener = favoritesCollection.addSnapshotListener { snapshot, error ->
-            if (error != null) {
-                Timber.w(error, "Listen for favorites failed")
-                _favoriteFoodIds.value = emptyList()
-                return@addSnapshotListener
-            }
-
-            val favoriteIds = snapshot?.documents?.mapNotNull { doc ->
-                doc.toObject(com.example.diabite.data.model.UserFavorite::class.java)?.foodId
-            } ?: emptyList()
-
-            Timber.d("UserViewModel: observed ${favoriteIds.size} favorites: $favoriteIds")
-            _favoriteFoodIds.value = favoriteIds
-        }
-
-        // Listen to history subcollection
-        val historyCollection = firestore.collection("users").document(uid).collection("history")
-        historyListener = historyCollection.addSnapshotListener { snapshot, error ->
-            if (error != null) {
-                Timber.w(error, "Listen for search history failed")
-                _searchHistory.value = emptyList()
-                return@addSnapshotListener
-            }
-
-            val historyItems = snapshot?.documents?.mapNotNull { doc ->
-                doc.toObject(UserHistory::class.java)
-            }?.sortedByDescending { it.eatenAt }?.map { it.foodId } ?: emptyList()
-
-            Timber.d("UserViewModel: observed ${historyItems.size} history items: $historyItems")
-            _searchHistory.value = historyItems
         }
     }
 
     private fun migrateLegacyData(uid: String) {
+        // Migration no longer needed - data is stored in root arrays
+        Timber.d("UserViewModel: Legacy data migration skipped - using root arrays")
+    }
+
+    private fun migrateLegacyFavorites() {
         viewModelScope.launch {
             try {
-                val userDoc = firestore.collection("users").document(uid).get().await()
-                if (userDoc.exists()) {
-                    val user = userDoc.toObject(User::class.java)
-                    if (user != null) {
-                        // Migrate favorites from array to subcollection
-                        val legacyFavorites = user.favoriteFoodIds
-                        if (legacyFavorites.isNotEmpty()) {
-                            Timber.d("UserViewModel: Migrating ${legacyFavorites.size} legacy favorites")
-                            val batch = firestore.batch()
-                            legacyFavorites.forEach { foodId ->
-                                val favoriteRef = firestore.collection("users").document(uid)
-                                    .collection("favorites").document(foodId)
-                                batch.set(favoriteRef, com.example.diabite.data.model.UserFavorite(foodId = foodId, addedAt = java.util.Date() as java.util.Date))
-                            }
-                            batch.commit().await()
+                val uid = firebaseAuth.currentUser?.uid
+                if (uid == null) return@launch
 
-                            // Clear the legacy array
-                            firestore.collection("users").document(uid)
-                                .update("favoriteFoodIds", emptyList<String>())
-                                .await()
+                // Check if there are any favorites in the old subcollection
+                val favoritesCollection = firestore.collection("users").document(uid).collection("favorites")
+                val snapshot = favoritesCollection.get().await()
+
+                if (!snapshot.isEmpty) {
+                    Timber.d("UserViewModel: Found ${snapshot.size()} legacy favorites in subcollection, migrating...")
+
+                    // Get current favorites from root array
+                    val userDoc = firestore.collection("users").document(uid).get().await()
+                    @Suppress("UNCHECKED_CAST")
+                    val currentFavorites = userDoc.get("favoriteFoodIds") as? List<String> ?: emptyList()
+                    val migratedFavorites = currentFavorites.toMutableList()
+
+                    // Add any favorites from subcollection that aren't already in root array
+                    val batch = firestore.batch()
+                    snapshot.documents.forEach { doc ->
+                        val foodId = doc.id
+                        if (!migratedFavorites.contains(foodId)) {
+                            migratedFavorites.add(foodId)
+                            Timber.d("UserViewModel: Migrating favorite: $foodId")
                         }
-
-                        // Migrate search history from array to subcollection
-                        val legacyHistory = user.searchHistory
-                        if (legacyHistory.isNotEmpty()) {
-                            Timber.d("UserViewModel: Migrating ${legacyHistory.size} legacy history items")
-                            val batch = firestore.batch()
-                            legacyHistory.forEach { query ->
-                                val historyRef = firestore.collection("users").document(uid)
-                                    .collection("history").document(query)
-                                batch.set(historyRef, UserHistory(foodId = query, eatenAt = java.util.Date() as java.util.Date))
-                            }
-                            batch.commit().await()
-
-                            // Clear the legacy array
-                            firestore.collection("users").document(uid)
-                                .update("searchHistory", emptyList<String>())
-                                .await()
-                        }
+                        // Delete the old subcollection document
+                        batch.delete(doc.reference)
                     }
+
+                    // Update root array with migrated favorites
+                    batch.update(firestore.collection("users").document(uid), "favoriteFoodIds", migratedFavorites)
+                    batch.commit().await()
+
+                    Timber.d("UserViewModel: Successfully migrated ${snapshot.size()} legacy favorites")
                 }
             } catch (e: Exception) {
-                Timber.w(e, "Failed to migrate legacy data")
+                Timber.w(e, "UserViewModel: Failed to migrate legacy favorites")
             }
         }
     }
@@ -260,6 +210,7 @@ class UserViewModel @Inject constructor(
                 currentFavorites.add(foodId)
             }
             _favoriteFoodIds.value = currentFavorites
+            Timber.d("UserViewModel.toggleFavoriteFood: optimistic update applied: wasFavorite=$wasFavorite, newFavorites=$currentFavorites")
 
             // Backend call
             val result = if (wasFavorite) {
@@ -270,8 +221,16 @@ class UserViewModel @Inject constructor(
 
             result.collect { resource ->
                 when (resource) {
+                    is com.example.diabite.util.Resource.Loading -> {
+                        Timber.d("UserViewModel.toggleFavoriteFood: loading state")
+                    }
+                    is com.example.diabite.util.Resource.Success -> {
+                        Timber.d("UserViewModel.toggleFavoriteFood: success toggling favorite for $foodId wasFavorite=$wasFavorite")
+                        // Success - the Firestore listener will update the UI with the latest data
+                        // No need to do anything here as observeUser() will handle the update
+                    }
                     is com.example.diabite.util.Resource.Error -> {
-                        Timber.w("UserViewModel.toggleFavoriteFood: failed to toggle favorite foodId=$foodId, wasFavorite=$wasFavorite, error=${resource.error?.userMessage}")
+                        Timber.w("UserViewModel.toggleFavoriteFood: failed to toggle favorite foodId=$foodId, wasFavorite=$wasFavorite, error=${resource.error?.userMessage} | code=${resource.error?.code}")
                         // Revert optimistic update on error
                         val revertFavorites = _favoriteFoodIds.value.toMutableList()
                         if (wasFavorite) {
@@ -280,14 +239,17 @@ class UserViewModel @Inject constructor(
                             revertFavorites.remove(foodId) // Remove if addition failed
                         }
                         _favoriteFoodIds.value = revertFavorites
-                    }
-                    else -> {
-                        Timber.d("UserViewModel.toggleFavoriteFood: success toggling favorite for $foodId wasFavorite=$wasFavorite")
-                        // Success - the Firestore listener will update the UI with the latest data
-                        // No need to do anything here as observeUser() will handle the update
+                        Timber.d("UserViewModel.toggleFavoriteFood: reverted optimistic update due to error")
                     }
                 }
             }
         }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        // Clean up listener when ViewModel is destroyed
+        userDocListener?.remove()
+        Timber.d("UserViewModel: listener cleaned up on onCleared()")
     }
 }

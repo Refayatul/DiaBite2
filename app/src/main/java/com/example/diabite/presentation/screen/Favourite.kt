@@ -62,6 +62,12 @@ fun FavouriteScreenUI(
     val user by viewModel.user.collectAsState()
     var visible by remember { mutableStateOf(false) }
 
+    // Update favorite foods whenever the IDs change
+    LaunchedEffect(favoriteFoodIds) {
+        Timber.d("FavouriteScreenUI: LaunchedEffect triggered with favoriteFoodIds=$favoriteFoodIds")
+        favoritesViewModel.updateFavoriteFoods(favoriteFoodIds)
+    }
+
     // Extract colors outside Canvas
     val backgroundColor = MaterialTheme.colorScheme.background
     val primaryColor = MaterialTheme.colorScheme.primary
