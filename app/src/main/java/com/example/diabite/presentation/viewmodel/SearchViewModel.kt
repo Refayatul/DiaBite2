@@ -146,7 +146,6 @@ class SearchViewModel @Inject constructor(
                 .filter { it.isNotBlank() && it.length >= 2 }
                 .distinctUntilChanged()
                 .flatMapLatest { query ->
-                    saveSearchToHistory(query)
                     performSearch(query)
                 }
                 .collect { resource ->

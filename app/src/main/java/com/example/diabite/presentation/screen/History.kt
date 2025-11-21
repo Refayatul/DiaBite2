@@ -48,6 +48,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.diabite.presentation.viewmodel.UserViewModel
+import timber.log.Timber
 
 @Composable
 fun HistoryScreenUI(
@@ -96,6 +97,7 @@ fun HistoryScreenUI(
         LaunchedEffect(Unit) {
             visible = true
         }
+        Timber.d("HistoryScreenUI: searchHistory size = ${searchHistory.size} items: ${searchHistory.joinToString()}")
 
         Column(
             modifier = Modifier

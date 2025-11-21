@@ -45,4 +45,9 @@ interface FoodRepository {
         userConditions: List<String>,
         limit: Int = 20
     ): Flow<Resource<List<FoodItem>>>
+
+    /**
+     * Fetch multiple FoodItems by their IDs in a single call.
+     */
+    fun getFoodsByIds(ids: List<String>): Flow<Resource<List<FoodItem>>>
 }

@@ -40,13 +40,18 @@ data class FoodItem(
     val addedBy: String = "",
     val createdAt: String = "",
     val lastUpdated: String = "",
-    val diabetesTypes: List<String> = emptyList()
+    val diabetesTypes: List<String> = emptyList(),
+    // Optional upload/provenance fields
+    val uploadedAt: String = "",
+    val uploadedBy: String = "",
+    val version: Int = 1
 )
 
 data class ConditionRecommendation(
     val condition: String = "",
     val safetyLevel: String = "",
     val reasoning: String = "",
+    val personalizedAdvice: String = "",
     val keyPoints: List<String> = emptyList(),
     val servingAdvice: String = "",
     val timingAdvice: String = "",

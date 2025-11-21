@@ -94,6 +94,12 @@ class FoodDetailViewModel @Inject constructor(
                         _foodItem.value = food
                         if (food != null) {
                             loadAlternatives(food.id)
+                            // Save the actually opened item to user search history
+                            try {
+                                authRepository.addSearchToHistory(food.name).collect {}
+                            } catch (e: Exception) {
+                                // Ignore history write failures; non-critical
+                            }
                         }
                         _isLoading.value = false
                     }

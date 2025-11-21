@@ -3,7 +3,10 @@ package com.example.diabite.presentation.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.diabite.data.model.User
+import com.example.diabite.data.model.UserHistory
 import com.example.diabite.domain.repository.AuthRepository
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -11,10 +14,13 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+import timber.log.Timber
 
 @HiltViewModel
 class UserViewModel @Inject constructor(
-    private val authRepository: AuthRepository
+    private val authRepository: AuthRepository,
+    private val firestore: FirebaseFirestore,
+    private val firebaseAuth: FirebaseAuth
 ) : ViewModel() {
 
     private val _user = MutableStateFlow<User?>(null)
@@ -38,9 +44,30 @@ class UserViewModel @Inject constructor(
             authRepository.getCurrentUser()
                 .collectLatest { user ->
                     _user.value = user
+                    Timber.d("UserViewModel: Received user snapshot: uid=${user?.uid} email=${user?.email} name=${user?.name}")
+                    Timber.d("UserViewModel: favoriteFoodIds=${user?.favoriteFoodIds}")
                     _favoriteFoodIds.value = user?.favoriteFoodIds ?: emptyList()
-                    // Search history is now stored in chronological order (most recent first)
-                    _searchHistory.value = user?.searchHistory ?: emptyList()
+
+                    // Observe search history from subcollection
+                    val uid = user?.uid ?: firebaseAuth.currentUser?.uid
+                    if (uid != null) {
+                        val historyCollection = firestore.collection("users").document(uid).collection("history")
+                        historyCollection.addSnapshotListener { snapshot, error ->
+                            if (error != null) {
+                                Timber.w(error, "Listen for search history failed")
+                                return@addSnapshotListener
+                            }
+
+                            val historyItems = snapshot?.documents?.mapNotNull { doc ->
+                                doc.toObject(UserHistory::class.java)
+                            }?.sortedByDescending { it.eatenAt }?.map { it.foodId } ?: emptyList()
+
+                            Timber.d("UserViewModel: observed ${historyItems.size} history items: $historyItems")
+                            _searchHistory.value = historyItems
+                        }
+                    } else {
+                        _searchHistory.value = emptyList()
+                    }
                 }
         }
     }

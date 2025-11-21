@@ -511,27 +511,44 @@ private fun ConditionAdviceSection(foodItem: FoodItem, diabetesType: String?) {
         if (recommendation != null) {
             ConditionAdviceCard(condition = formatConditionKeyForDisplay(key), recommendation = recommendation, diabetesType = diabetesType)
         } else {
+            // Debug: show what keys are available
             Card(
                 colors = CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.surfaceVariant
                 ),
                 shape = RoundedCornerShape(16.dp)
             ) {
-                Row(
-                    modifier = Modifier.padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                Column(
+                    modifier = Modifier.padding(16.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Filled.QuestionMark,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Text(
-                        text = "No specific recommendations available for your diabetes type.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.QuestionMark,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(
+                            text = "No specific recommendations available for your diabetes type (looking for key: '$key').",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    if (foodItem.recommendations.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "Available keys: ${foodItem.recommendations.keys.joinToString(", ")}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        // Show ALL recommendations anyway
+                        foodItem.recommendations.forEach { (availKey, availRec) ->
+                            Spacer(modifier = Modifier.height(12.dp))
+                            ConditionAdviceCard(condition = formatConditionKeyForDisplay(availKey), recommendation = availRec, diabetesType = diabetesType)
+                        }
+                    }
                 }
             }
         }
@@ -565,6 +582,23 @@ private fun ConditionAdviceCard(
                 color = diabetesColor,
                 modifier = Modifier.padding(bottom = 16.dp)
             )
+
+            // Show short personalized advice sentence if available
+            if (recommendation.personalizedAdvice.isNotBlank()) {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = diabetesColor.copy(alpha = 0.06f)),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = recommendation.personalizedAdvice,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.padding(12.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+            }
 
             Row(
                 modifier = Modifier.fillMaxWidth(),

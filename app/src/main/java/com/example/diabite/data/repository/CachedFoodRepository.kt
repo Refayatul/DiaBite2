@@ -5,6 +5,7 @@ import com.example.diabite.data.model.FoodItem
 import com.example.diabite.domain.repository.FoodRepository
 import com.example.diabite.util.AppError
 import com.example.diabite.util.Resource
+import timber.log.Timber
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.asStateFlow
@@ -79,9 +80,16 @@ class CachedFoodRepository @Inject constructor(
                                 if (item != null) {
                                     // Persist to Firestore and cache for future searches
                                     try {
-                                        firestoreRepository.saveFoodItem(item).collect {}
+                                        Timber.d("Persisting AI food to Firestore: ${item.id} - ${item.name}")
+                                        firestoreRepository.saveFoodItem(item).collect { saveRes ->
+                                            when (saveRes) {
+                                                is Resource.Success -> Timber.d("Successfully persisted ${item.id} to Firestore")
+                                                is Resource.Error -> Timber.e("Failed to persist ${item.id}: ${saveRes.error?.userMessage}")
+                                                is Resource.Loading -> Timber.d("Persisting ${item.id}...")
+                                            }
+                                        }
                                     } catch (e: Exception) {
-                                        // Log/passthrough — persistence failure shouldn't block showing the result
+                                        Timber.e(e, "Exception while persisting ${item.id}")
                                     }
 
                                     cacheManager.cacheFoodItemAsync(item)
@@ -307,6 +315,47 @@ class CachedFoodRepository @Inject constructor(
             } catch (firestoreException: Exception) {
                 emit(Resource.error(AppError.fromException(Exception("Both cache and network failed: ${e.message}"))))
             }
+        }
+    }
+
+    override fun getFoodsByIds(ids: List<String>): Flow<Resource<List<FoodItem>>> = flow {
+        emit(Resource.loading())
+
+        try {
+            if (ids.isEmpty()) {
+                emit(Resource.success(emptyList()))
+                return@flow
+            }
+
+            // First try to load from cache where possible
+            val cached = ids.mapNotNull { id -> cacheManager.getCachedFoodItem(id) }
+
+            if (cached.size == ids.size) {
+                emit(Resource.success(cached))
+                return@flow
+            }
+
+            // Fetch missing from Firestore in batch
+            val firestoreResult = firestoreRepository.getFoodsByIds(ids)
+
+            firestoreResult.collect { resource ->
+                when (resource) {
+                    is Resource.Success -> {
+                        val foods = resource.data ?: emptyList()
+                        // Cache fetched items
+                        foods.forEach { cacheManager.cacheFoodItemAsync(it) }
+                        // Merge cache + fetched (preserve original order of ids)
+                        val merged = ids.mapNotNull { id ->
+                            cached.find { it.id == id } ?: foods.find { it.id == id }
+                        }
+                        emit(Resource.success(merged))
+                    }
+                    is Resource.Error -> emit(resource)
+                    is Resource.Loading -> emit(Resource.loading())
+                }
+            }
+        } catch (e: Exception) {
+            emit(Resource.error(AppError.fromException(e)))
         }
     }
 

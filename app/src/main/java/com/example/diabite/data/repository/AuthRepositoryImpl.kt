@@ -1,6 +1,8 @@
 package com.example.diabite.data.repository
 
 import com.example.diabite.data.model.User
+import com.example.diabite.data.model.UserFavorite
+import com.example.diabite.data.model.UserHistory
 import com.example.diabite.domain.repository.AuthRepository
 import com.example.diabite.util.AppError
 import com.example.diabite.util.Resource
@@ -14,6 +16,7 @@ import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.tasks.await
 import timber.log.Timber
+import java.util.Date
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -128,6 +131,7 @@ class AuthRepositoryImpl @Inject constructor(
 
     override fun getCurrentUser(): Flow<User?> = callbackFlow {
         val firebaseUser = firebaseAuth.currentUser
+        Timber.d("AuthRepositoryImpl: firebaseAuth.currentUser = ${firebaseUser?.uid} email=${firebaseUser?.email}")
         if (firebaseUser == null) {
             trySend(null)
             close()
@@ -144,6 +148,7 @@ class AuthRepositoryImpl @Inject constructor(
             }
 
             if (snapshot != null && snapshot.exists()) {
+                Timber.d("AuthRepositoryImpl: snapshot exists for user ${firebaseUser.uid}: data=${snapshot.data}")
                 val user = snapshot.toObject(User::class.java) ?: createDefaultUser(firebaseUser)
                 trySend(user)
             } else {
@@ -192,11 +197,15 @@ class AuthRepositoryImpl @Inject constructor(
                 emit(Resource.error(AppError.AuthenticationError("User not logged in")))
                 return@flow
             }
-            
+
+            // Add to favorites subcollection
+            val favorite = UserFavorite(foodId = foodId, addedAt = Date())
             firestore.collection("users").document(uid)
-                .update("favoriteFoodIds", FieldValue.arrayUnion(foodId))
+                .collection("favorites")
+                .document(foodId)
+                .set(favorite)
                 .await()
-                
+
             emit(Resource.success(Unit))
         } catch (e: Exception) {
             Timber.e(e, "Failed to add favorite food")
@@ -212,9 +221,14 @@ class AuthRepositoryImpl @Inject constructor(
                 emit(Resource.error(AppError.AuthenticationError("User not logged in")))
                 return@flow
             }
+
+            // Remove from favorites subcollection
             firestore.collection("users").document(uid)
-                .update("favoriteFoodIds", FieldValue.arrayRemove(foodId))
+                .collection("favorites")
+                .document(foodId)
+                .delete()
                 .await()
+
             emit(Resource.success(Unit))
         } catch (e: Exception) {
             Timber.e(e, "Failed to remove favorite food")
@@ -231,25 +245,13 @@ class AuthRepositoryImpl @Inject constructor(
                 return@flow
             }
 
-            val userDocRef = firestore.collection("users").document(uid)
-
-            // Get current search history
-            val userDoc = userDocRef.get().await()
-            val currentHistory = userDoc.get("searchHistory") as? List<String> ?: emptyList()
-
-            // Create new history with query at the beginning (most recent first)
-            val newHistory = mutableListOf<String>()
-            newHistory.add(query) // Add to front
-            // Add other items, excluding the current query if it exists elsewhere
-            newHistory.addAll(currentHistory.filter { it != query })
-
-            // Limit history to reasonable size (e.g., 50 items)
-            if (newHistory.size > 50) {
-                newHistory.subList(50, newHistory.size).clear()
-            }
-
-            // Update the entire field
-            userDocRef.update("searchHistory", newHistory).await()
+            // Add to history subcollection with timestamp
+            val historyEntry = UserHistory(foodId = query, eatenAt = Date())
+            firestore.collection("users").document(uid)
+                .collection("history")
+                .document(query)
+                .set(historyEntry)
+                .await()
 
             emit(Resource.success(Unit))
         } catch (e: Exception) {
@@ -267,9 +269,17 @@ class AuthRepositoryImpl @Inject constructor(
                 return@flow
             }
 
-            firestore.collection("users").document(uid)
-                .update("searchHistory", emptyList<String>())
-                .await()
+            // Delete all documents in history subcollection
+            val historyCollection = firestore.collection("users").document(uid).collection("history")
+            val batch = firestore.batch()
+
+            // Get all history documents and delete them
+            val historyDocs = historyCollection.get().await()
+            historyDocs.documents.forEach { doc ->
+                batch.delete(doc.reference)
+            }
+
+            batch.commit().await()
 
             emit(Resource.success(Unit))
         } catch (e: Exception) {

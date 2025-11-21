@@ -109,7 +109,7 @@ fun HomeScreen(navController: NavHostController, authViewModel: AuthViewModel, u
     val bottomNavController = rememberNavController()
     val showLogoutDialog = remember { mutableStateOf(false) }
 
-    val items = listOf(BottomNavItem.Home, BottomNavItem.History, BottomNavItem.Favourite)
+    val items = listOf(BottomNavItem.Home, BottomNavItem.Favourite, BottomNavItem.History)
 
     Scaffold(
         topBar = {

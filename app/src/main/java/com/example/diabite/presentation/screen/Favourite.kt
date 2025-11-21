@@ -46,7 +46,11 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
+import com.example.diabite.presentation.viewmodel.FavoritesViewModel
+import timber.log.Timber
 import com.example.diabite.presentation.viewmodel.UserViewModel
+import com.example.diabite.data.model.FoodItem
 
 @Composable
 fun FavouriteScreenUI(
@@ -54,6 +58,9 @@ fun FavouriteScreenUI(
     onFavoriteItemClick: (String) -> Unit
 ) {
     val favoriteFoodIds by viewModel.favoriteFoodIds.collectAsState()
+    // New FavoritesViewModel loads FoodItem details for the favorite IDs
+    val favoritesViewModel: FavoritesViewModel = hiltViewModel()
+    val favoriteFoods by favoritesViewModel.favoriteFoods.collectAsState()
     var visible by remember { mutableStateOf(false) }
 
     // Extract colors outside Canvas
@@ -92,6 +99,7 @@ fun FavouriteScreenUI(
         LaunchedEffect(Unit) {
             visible = true
         }
+        Timber.d("FavouriteScreenUI: favoriteFoodIds=$favoriteFoodIds | loadedFoodCount=${favoriteFoods.size}")
 
         Column(
             modifier = Modifier
@@ -133,8 +141,11 @@ fun FavouriteScreenUI(
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         items(favoriteFoodIds) { foodId ->
+                            // Try to show detailed info if available from batch fetch
+                            val food: FoodItem? = favoriteFoods.find { it.id == foodId }
                             FavouriteItemCard(
                                 foodId = foodId,
+                                foodName = food?.name,
                                 onClick = { onFavoriteItemClick(foodId) },
                                 onRemoveClick = { viewModel.toggleFavoriteFood(foodId) }
                             )
@@ -149,6 +160,7 @@ fun FavouriteScreenUI(
 @Composable
 fun FavouriteItemCard(
     foodId: String,
+    foodName: String? = null,
     onClick: () -> Unit,
     onRemoveClick: () -> Unit
 ) {
@@ -184,13 +196,13 @@ fun FavouriteItemCard(
             )
             Spacer(modifier = Modifier.width(16.dp)) // Spacer with width
 
-            // Food ID Text
+            // Food name (fallback to id if not loaded)
             Text(
-                text = foodId.replaceFirstChar { it.uppercase() }, // Simple display format
+                text = (foodName ?: foodId).replaceFirstChar { it.uppercase() },
                 style = MaterialTheme.typography.bodyLarge.copy(
-                    fontWeight = FontWeight.Medium // Slightly bolder text
+                    fontWeight = FontWeight.Medium
                 ),
-                color = MaterialTheme.colorScheme.onSurface, // Use standard content color
+                color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.weight(1f)
             )
 

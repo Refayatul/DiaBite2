@@ -192,6 +192,8 @@ class FirestoreFoodRepository @Inject constructor(
                 allDocs
             }
 
+            Timber.d("getAlternatives: fetched ${alternatives.size} foods for ids: ${alternativeIds.joinToString(",")} -> ${alternatives.map { it.id }}")
+
             emit(Resource.success(alternatives))
 
         } catch (e: Exception) {
@@ -313,6 +315,46 @@ class FirestoreFoodRepository @Inject constructor(
         }
     }
 
+    override fun getFoodsByIds(ids: List<String>): Flow<Resource<List<FoodItem>>> = flow {
+        emit(Resource.loading())
+
+        try {
+            if (ids.isEmpty()) {
+                emit(Resource.success(emptyList()))
+                return@flow
+            }
+
+            val result = retryOperation {
+                // Firestore 'in' queries are limited to 10, so chunk
+                val chunks = ids.distinct().chunked(10)
+                val allDocs = mutableListOf<FoodItem>()
+
+                for (chunk in chunks) {
+                    val snapshot = foodCollection
+                        .whereIn("id", chunk)
+                        .get()
+                        .await()
+
+                    allDocs.addAll(snapshot.documents.mapNotNull { doc ->
+                        try {
+                            doc.toFoodItem()
+                        } catch (e: Exception) {
+                            Timber.w(e, "Failed to parse food document in batch fetch: ${doc.id}")
+                            null
+                        }
+                    })
+                }
+
+                allDocs
+            }
+
+            emit(Resource.success(result))
+        } catch (e: Exception) {
+            Timber.e(e, "Batch fetch foods by ids failed")
+            emit(Resource.firebaseError(e))
+        }
+    }
+
     /**
      * Save or update a FoodItem into Firestore
      */
@@ -320,14 +362,15 @@ class FirestoreFoodRepository @Inject constructor(
         emit(Resource.loading<Boolean>())
 
         try {
+            Timber.d("saveFoodItem: Attempting to save ${food.id} (name: ${food.name}) to Firestore")
             retryOperation {
                 // Use the food.id as the document id
                 foodCollection.document(food.id).set(food).await()
             }
-
+            Timber.d("saveFoodItem: Successfully saved ${food.id} to Firestore")
             emit(Resource.success(true))
         } catch (e: Exception) {
-            Timber.e(e, "Save food item failed")
+            Timber.e(e, "Save food item failed for ${food.id}")
             emit(Resource.firebaseError<Boolean>(e))
         }
     }
@@ -413,6 +456,7 @@ private fun com.google.firebase.firestore.DocumentSnapshot.toFoodItem(): FoodIte
                     condition = recMap["condition"] as? String ?: "",
                     safetyLevel = recMap["safetyLevel"] as? String ?: "",
                     reasoning = recMap["reasoning"] as? String ?: "",
+                        personalizedAdvice = recMap["personalizedDiabetesAdvice"] as? String ?: recMap["personalizedAdvice"] as? String ?: "",
                     keyPoints = (recMap["keyPoints"] as? List<String>) ?: emptyList(),
                     servingAdvice = recMap["servingAdvice"] as? String ?: "",
                     timingAdvice = recMap["timingAdvice"] as? String ?: "",
