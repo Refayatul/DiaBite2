@@ -35,6 +35,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.hilt.navigation.compose.hiltViewModel
+import com.example.diabite.presentation.viewmodel.FavoritesViewModel
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -46,21 +48,18 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
-import com.example.diabite.presentation.viewmodel.FavoritesViewModel
 import timber.log.Timber
 import com.example.diabite.presentation.viewmodel.UserViewModel
-import com.example.diabite.data.model.FoodItem
 
 @Composable
 fun FavouriteScreenUI(
     viewModel: UserViewModel,
     onFavoriteItemClick: (String) -> Unit
 ) {
-    val favoriteFoodIds by viewModel.favoriteFoodIds.collectAsState()
-    // New FavoritesViewModel loads FoodItem details for the favorite IDs
+    val favoriteFoodIds by viewModel.favoriteFoodIds.collectAsState(initial = emptyList())
     val favoritesViewModel: FavoritesViewModel = hiltViewModel()
-    val favoriteFoods by favoritesViewModel.favoriteFoods.collectAsState()
+    val favoriteFoods by favoritesViewModel.favoriteFoods.collectAsState(initial = emptyList())
+    val user by viewModel.user.collectAsState()
     var visible by remember { mutableStateOf(false) }
 
     // Extract colors outside Canvas
@@ -99,7 +98,7 @@ fun FavouriteScreenUI(
         LaunchedEffect(Unit) {
             visible = true
         }
-        Timber.d("FavouriteScreenUI: favoriteFoodIds=$favoriteFoodIds | loadedFoodCount=${favoriteFoods.size}")
+        Timber.d("FavouriteScreenUI: favoriteFoodIds=$favoriteFoodIds | favoriteFoodsCount=${favoriteFoods.size} | userUid=${user?.uid}")
 
         Column(
             modifier = Modifier
@@ -123,7 +122,7 @@ fun FavouriteScreenUI(
                 )
             }
 
-            if (favoriteFoodIds.isEmpty()) {
+            if (favoriteFoodIds.isEmpty() && favoriteFoods.isEmpty()) {
                 AnimatedVisibility(
                     visible = visible,
                     enter = scaleIn(animationSpec = tween(600)) + fadeIn(animationSpec = tween(600))
@@ -141,11 +140,10 @@ fun FavouriteScreenUI(
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         items(favoriteFoodIds) { foodId ->
-                            // Try to show detailed info if available from batch fetch
-                            val food: FoodItem? = favoriteFoods.find { it.id == foodId }
                             FavouriteItemCard(
                                 foodId = foodId,
-                                foodName = food?.name,
+                                // Try to find name from fetched favoriteFoods list by id; fall back to id
+                                foodName = favoriteFoods.find { it.id == foodId }?.name,
                                 onClick = { onFavoriteItemClick(foodId) },
                                 onRemoveClick = { viewModel.toggleFavoriteFood(foodId) }
                             )

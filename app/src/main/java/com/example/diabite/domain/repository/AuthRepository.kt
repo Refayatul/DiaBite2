@@ -16,6 +16,7 @@ interface AuthRepository {
     // Favorites and History
     fun addFavoriteFood(foodId: String): Flow<Resource<Unit>>
     fun removeFavoriteFood(foodId: String): Flow<Resource<Unit>>
+    fun getFavoriteFoodIdsFromSubcollection(): Flow<List<String>>
     fun addSearchToHistory(query: String): Flow<Resource<Unit>>
     fun clearSearchHistory(): Flow<Resource<Unit>>
 }

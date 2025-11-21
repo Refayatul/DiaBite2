@@ -6,10 +6,13 @@ import androidx.lifecycle.viewModelScope
 import com.example.diabite.data.local.CacheManager
 import com.example.diabite.data.model.FoodItem
 import com.example.diabite.data.model.User
+import com.example.diabite.data.model.UserHistory
 import com.example.diabite.domain.repository.AuthRepository
 import com.example.diabite.domain.repository.FoodRepository
 import com.example.diabite.util.FoodNormalizer
 import com.example.diabite.util.Resource
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -21,6 +24,8 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
+import timber.log.Timber
 import javax.inject.Inject
 
 @HiltViewModel
@@ -28,6 +33,8 @@ class SearchViewModel @Inject constructor(
     private val foodRepository: FoodRepository,
     private val cachedFoodRepository: com.example.diabite.data.repository.CachedFoodRepository,
     private val authRepository: AuthRepository,
+    private val firestore: FirebaseFirestore,
+    private val firebaseAuth: FirebaseAuth,
     private val cacheManager: CacheManager,
     private val foodNormalizer: FoodNormalizer,
     private val savedStateHandle: SavedStateHandle
@@ -60,15 +67,12 @@ class SearchViewModel @Inject constructor(
     private val _isEmptyState = MutableStateFlow(true)
     val isEmptyState: StateFlow<Boolean> = _isEmptyState.asStateFlow()
 
-    // State to track if user needs to select a diabetes type
     private val _isDiabetesTypeMissing = MutableStateFlow(false)
     val isDiabetesTypeMissing: StateFlow<Boolean> = _isDiabetesTypeMissing.asStateFlow()
 
-    // State to track if advanced AI search is available
     private val _canDoAISearch = MutableStateFlow(false)
     val canDoAISearch: StateFlow<Boolean> = _canDoAISearch.asStateFlow()
 
-    // Current user object to update
     private var currentUser: User? = null
 
     init {
@@ -97,11 +101,63 @@ class SearchViewModel @Inject constructor(
                     val diabetesType = user?.diabetesType ?: ""
                     _userDiabetesType.value = diabetesType
                     _userConditions.value = if (diabetesType.isNotEmpty()) listOf(diabetesType) else emptyList()
-                    _searchHistory.value = user?.searchHistory?.reversed() ?: emptyList()
+
+                    // Listen to search history from subcollection
+                    val uid = user?.uid ?: firebaseAuth.currentUser?.uid
+                    if (uid != null) {
+                        // Migrate any legacy data first
+                        migrateLegacyHistoryData(uid)
+
+                        val historyCollection = firestore.collection("users").document(uid).collection("history")
+                        historyCollection.addSnapshotListener { snapshot, error ->
+                            if (error != null) {
+                                Timber.w(error, "Listen for search history failed")
+                                _searchHistory.value = emptyList()
+                                return@addSnapshotListener
+                            }
+
+                            val historyItems = snapshot?.documents?.mapNotNull { doc ->
+                                doc.toObject(UserHistory::class.java)
+                            }?.sortedByDescending { it.eatenAt }?.map { it.foodId } ?: emptyList()
+
+                            Timber.d("SearchViewModel: observed ${historyItems.size} history items: $historyItems")
+                            _searchHistory.value = historyItems
+                        }
+                    } else {
+                        _searchHistory.value = emptyList()
+                    }
 
                     // Check if diabetes type is missing
                     _isDiabetesTypeMissing.value = user != null && diabetesType.isBlank()
                 }
+        }
+    }
+
+    private fun migrateLegacyHistoryData(uid: String) {
+        viewModelScope.launch {
+            try {
+                val userDoc = firestore.collection("users").document(uid).get().await()
+                if (userDoc.exists()) {
+                    val user = userDoc.toObject(User::class.java)
+                    if (user != null && user.searchHistory.isNotEmpty()) {
+                        Timber.d("SearchViewModel: Migrating ${user.searchHistory.size} legacy history items")
+                        val batch = firestore.batch()
+                        user.searchHistory.forEach { query ->
+                            val historyRef = firestore.collection("users").document(uid)
+                                .collection("history").document(query)
+                            batch.set(historyRef, UserHistory(foodId = query, eatenAt = java.util.Date() as java.util.Date))
+                        }
+                        batch.commit().await()
+
+                        // Clear the legacy array
+                        firestore.collection("users").document(uid)
+                            .update("searchHistory", emptyList<String>())
+                            .await()
+                    }
+                }
+            } catch (e: Exception) {
+                Timber.w(e, "Failed to migrate legacy history data")
+            }
         }
     }
 
@@ -157,6 +213,10 @@ class SearchViewModel @Inject constructor(
                                 foodNormalizer.getSearchRelevanceScore(searchQuery.value, it.name)
                             }
                             _isEmptyState.value = foods.isEmpty()
+                            // Save successful database search to history
+                            if (foods.isNotEmpty()) {
+                                saveSearchToHistory(searchQuery.value)
+                            }
                             // Show AI search option if no results found in database
                             _canDoAISearch.value = foods.isEmpty()
                         }
@@ -235,6 +295,8 @@ class SearchViewModel @Inject constructor(
                                     }
                                     _isEmptyState.value = false
                                     _canDoAISearch.value = false
+                                    // Save successful AI search to history
+                                    saveSearchToHistory(currentQuery)
                                 } else {
                                     _error.value = "No food information found"
                                     _isEmptyState.value = true

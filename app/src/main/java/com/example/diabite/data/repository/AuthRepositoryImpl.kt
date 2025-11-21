@@ -193,22 +193,28 @@ class AuthRepositoryImpl @Inject constructor(
         emit(Resource.loading())
         try {
             val uid = firebaseAuth.currentUser?.uid
+            Timber.d("AuthRepositoryImpl.addFavoriteFood: called by uid=$uid for foodId=$foodId")
             if (uid == null) {
                 emit(Resource.error(AppError.AuthenticationError("User not logged in")))
                 return@flow
             }
 
-            // Add to favorites subcollection
-            val favorite = UserFavorite(foodId = foodId, addedAt = Date())
+            // Update the root array favoriteFoodIds
             firestore.collection("users").document(uid)
-                .collection("favorites")
-                .document(foodId)
-                .set(favorite)
+                .update("favoriteFoodIds", FieldValue.arrayUnion(foodId))
                 .await()
+            Timber.d("AuthRepositoryImpl.addFavoriteFood: successfully added foodId=$foodId to user=$uid favoriteFoodIds")
 
             emit(Resource.success(Unit))
         } catch (e: Exception) {
-            Timber.e(e, "Failed to add favorite food")
+            Timber.e(e, "Failed to add favorite food for foodId=$foodId uid=${firebaseAuth.currentUser?.uid}")
+            // More detailed logging for Firestore exceptions
+            when (e) {
+                is com.google.firebase.firestore.FirebaseFirestoreException -> {
+                    Timber.w(e, "Firestore error: code=${e.code} message=${e.message}")
+                }
+                else -> Unit
+            }
             emit(Resource.firebaseError(e))
         }
     }
@@ -217,22 +223,57 @@ class AuthRepositoryImpl @Inject constructor(
         emit(Resource.loading())
         try {
             val uid = firebaseAuth.currentUser?.uid
+            Timber.d("AuthRepositoryImpl.removeFavoriteFood: called by uid=$uid to remove foodId=$foodId")
             if (uid == null) {
                 emit(Resource.error(AppError.AuthenticationError("User not logged in")))
                 return@flow
             }
 
-            // Remove from favorites subcollection
+            // Update the root array favoriteFoodIds
             firestore.collection("users").document(uid)
-                .collection("favorites")
-                .document(foodId)
-                .delete()
+                .update("favoriteFoodIds", FieldValue.arrayRemove(foodId))
                 .await()
+            Timber.d("AuthRepositoryImpl.removeFavoriteFood: successfully removed foodId=$foodId from user=$uid favoriteFoodIds")
 
             emit(Resource.success(Unit))
         } catch (e: Exception) {
-            Timber.e(e, "Failed to remove favorite food")
+            Timber.e(e, "Failed to remove favorite food for foodId=$foodId uid=${firebaseAuth.currentUser?.uid}")
+            when (e) {
+                is com.google.firebase.firestore.FirebaseFirestoreException -> {
+                    Timber.w(e, "Firestore error: code=${e.code} message=${e.message}")
+                }
+                else -> Unit
+            }
             emit(Resource.firebaseError(e))
+        }
+    }
+
+    override fun getFavoriteFoodIdsFromSubcollection(): Flow<List<String>> = flow {
+        emit(emptyList())
+        try {
+            val uid = firebaseAuth.currentUser?.uid
+            if (uid == null) {
+                emit(emptyList())
+                return@flow
+            }
+
+            val snapshot = firestore.collection("users").document(uid)
+                .collection("favorites")
+                .get()
+                .await()
+
+            val ids = snapshot.documents.mapNotNull { doc ->
+                try {
+                    doc.toObject(com.example.diabite.data.model.UserFavorite::class.java)?.foodId
+                } catch (e: Exception) {
+                    null
+                }
+            }
+            Timber.d("AuthRepositoryImpl.getFavoriteFoodIdsFromSubcollection: user=$uid found ${ids.size} favorites: $ids")
+            emit(ids)
+        } catch (e: Exception) {
+            Timber.w(e, "getFavoriteFoodIdsFromSubcollection failed")
+            emit(emptyList())
         }
     }
 
@@ -252,6 +293,16 @@ class AuthRepositoryImpl @Inject constructor(
                 .document(query)
                 .set(historyEntry)
                 .await()
+
+            // Also maintain the root-level `searchHistory` array for UI compatibility
+            try {
+                firestore.collection("users").document(uid)
+                    .update("searchHistory", FieldValue.arrayUnion(query))
+                    .await()
+                Timber.d("AuthRepositoryImpl.addSearchToHistory: user=$uid pushed $query into root searchHistory array")
+            } catch (arrayEx: Exception) {
+                Timber.w(arrayEx, "AuthRepositoryImpl.addSearchToHistory: failed to update root searchHistory array for user=$uid")
+            }
 
             emit(Resource.success(Unit))
         } catch (e: Exception) {
@@ -280,6 +331,16 @@ class AuthRepositoryImpl @Inject constructor(
             }
 
             batch.commit().await()
+
+            // Also clear root-level searchHistory field (for UI compatibility)
+            try {
+                firestore.collection("users").document(uid)
+                    .update("searchHistory", emptyList<String>())
+                    .await()
+                Timber.d("AuthRepositoryImpl.clearSearchHistory: cleared root searchHistory for user=$uid")
+            } catch (e: Exception) {
+                Timber.w(e, "AuthRepositoryImpl.clearSearchHistory: failed to clear root searchHistory for user=$uid")
+            }
 
             emit(Resource.success(Unit))
         } catch (e: Exception) {

@@ -8,6 +8,8 @@ import com.example.diabite.domain.repository.AuthRepository
 import com.example.diabite.domain.repository.FoodRepository
 import com.example.diabite.util.ConditionNormalizer
 import com.example.diabite.util.Resource
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -15,12 +17,16 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
+import timber.log.Timber
 import javax.inject.Inject
 
 @HiltViewModel
 class FoodDetailViewModel @Inject constructor(
     private val foodRepository: FoodRepository,
     private val authRepository: AuthRepository,
+    private val firestore: FirebaseFirestore,
+    private val firebaseAuth: FirebaseAuth,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
@@ -67,12 +73,12 @@ class FoodDetailViewModel @Inject constructor(
                 val user = authRepository.getCurrentUser().first()
                 val diabetesType = user?.diabetesType?.let { ConditionNormalizer.normalizeCondition(it) }
                 _userDiabetesType.value = diabetesType
-                
+
                 // User conditions derived from diabetes type only
                 _userConditions.value = listOfNotNull(diabetesType)
 
-                // Check favorite status directly from user object
-                _isFavorite.value = user?.favoriteFoodIds?.contains(foodId) == true
+                // Check favorite status from favorites subcollection
+                checkFavoriteStatus()
 
                 // Then load food details
                 loadFoodDetails()
@@ -115,6 +121,27 @@ class FoodDetailViewModel @Inject constructor(
         }
     }
 
+    private fun checkFavoriteStatus() {
+        viewModelScope.launch {
+            try {
+                val uid = firebaseAuth.currentUser?.uid
+                if (uid != null) {
+                    val favoriteDoc = firestore.collection("users")
+                        .document(uid)
+                        .collection("favorites")
+                        .document(foodId)
+                        .get()
+                        .await()
+
+                    _isFavorite.value = favoriteDoc.exists()
+                }
+            } catch (e: Exception) {
+                Timber.w(e, "Failed to check favorite status")
+                _isFavorite.value = false
+            }
+        }
+    }
+
     private fun loadAlternatives(foodId: String) {
         viewModelScope.launch {
             foodRepository.getAlternatives(foodId).collect {
@@ -133,10 +160,18 @@ class FoodDetailViewModel @Inject constructor(
             }
 
             action.collect { resource ->
-                if (resource is Resource.Success) {
-                    _isFavorite.value = !currentlyFavorite
-                } else if (resource is Resource.Error) {
-                    _error.value = "Failed to update favorite status."
+                when (resource) {
+                    is Resource.Loading -> Timber.d("toggleFavoriteStatus: loading")
+                    is Resource.Success -> {
+                        Timber.d("toggleFavoriteStatus: success")
+                        _isFavorite.value = !currentlyFavorite
+                    }
+                    is Resource.Error -> {
+                        val err = resource.error
+                        _error.value = err?.userMessage ?: "Failed to update favorite status."
+                        Timber.e(err?.technicalMessage ?: "Favorite update failed: ${err?.userMessage}")
+                        Timber.d("Favorite toggle failed: code=${err?.code} userMessage=${err?.userMessage} technical=${err?.technicalMessage}")
+                    }
                 }
             }
         }

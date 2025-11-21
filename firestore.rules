@@ -6,9 +6,13 @@ service cloud.firestore {
       allow read, write: if request.auth != null;
     }
     
-    // Users can only access their own data
+    // Users can only access their own data (including favoriteFoodIds and searchHistory root arrays)
     match /users/{userId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
+      // Allow reads/writes to any subcollections under users/{userId} for future use
+      match /{document=**} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
     }
     
     match /userHistory/{userId} {
