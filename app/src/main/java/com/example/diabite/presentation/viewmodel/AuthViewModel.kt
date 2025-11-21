@@ -49,7 +49,7 @@ class AuthViewModel @Inject constructor(
 
     private val _passwordResetState = MutableStateFlow<Resource<Unit>>(Resource.loading())
     val passwordResetState: StateFlow<Resource<Unit>> = _passwordResetState.asStateFlow()
-    
+
     // State for the multi-step registration
     private val _registrationState = MutableStateFlow(RegistrationState())
     val registrationState: StateFlow<RegistrationState> = _registrationState.asStateFlow()
@@ -93,10 +93,12 @@ class AuthViewModel @Inject constructor(
                 _signUpState.value = Resource.error(AppError.InvalidEmailError())
                 return
             }
+
             password.length < 6 -> {
                 _signUpState.value = Resource.error(AppError.InvalidPasswordError())
                 return
             }
+
             name.isBlank() -> {
                 _signUpState.value = Resource.error(AppError.MissingFieldError("name"))
                 return
@@ -121,10 +123,12 @@ class AuthViewModel @Inject constructor(
                             _currentUser.value = signedUpUser
                             _signUpState.value = Resource.success(signedUpUser)
                         }
+
                         is Resource.Error -> {
                             Timber.e(resource.error?.cause, "Sign up failed")
                             _signUpState.value = Resource.error(resource.error!!, resource.data)
                         }
+
                         is Resource.Loading -> {
                             _signUpState.value = Resource.loading()
                         }
@@ -155,6 +159,7 @@ class AuthViewModel @Inject constructor(
                 _loginState.value = Resource.error(AppError.InvalidEmailError())
                 return
             }
+
             password.isBlank() -> {
                 _loginState.value = Resource.error(AppError.MissingFieldError("password"))
                 return
@@ -172,10 +177,12 @@ class AuthViewModel @Inject constructor(
                             _currentUser.value = loggedInUser
                             _loginState.value = Resource.success(loggedInUser)
                         }
+
                         is Resource.Error -> {
                             Timber.e(resource.error?.cause, "Login failed")
                             _loginState.value = Resource.error(resource.error!!, resource.data)
                         }
+
                         is Resource.Loading -> {
                             _loginState.value = Resource.loading()
                         }
@@ -194,22 +201,25 @@ class AuthViewModel @Inject constructor(
         _loginState.value = Resource.loading()
         _signUpState.value = Resource.loading()
         clearRegistrationData()
-        
+
         _logoutState.value = Resource.loading()
 
         viewModelScope.launch {
             try {
                 authRepository.logout().collect { resource ->
-                when (resource) {
-                    is Resource.Success -> {
-                        _currentUser.value = null
-                        _authState.value = Resource.success(null) // Update auth state for navigation
-                        _logoutState.value = Resource.success(Unit)
-                    }
+                    when (resource) {
+                        is Resource.Success -> {
+                            _currentUser.value = null
+                            _authState.value =
+                                Resource.success(null) // Update auth state for navigation
+                            _logoutState.value = Resource.success(Unit)
+                        }
+
                         is Resource.Error -> {
                             Timber.e(resource.error?.cause, "Logout failed")
                             _logoutState.value = resource
                         }
+
                         is Resource.Loading -> {
                             _logoutState.value = Resource.loading()
                         }
@@ -230,10 +240,12 @@ class AuthViewModel @Inject constructor(
                         is Resource.Success -> {
                             _currentUser.value = resource.data
                         }
+
                         is Resource.Error -> {
                             Timber.e(resource.error?.cause, "Profile update failed")
                             // Could emit a separate state for profile updates if needed
                         }
+
                         is Resource.Loading -> {
                             // Could emit loading state if needed
                         }
@@ -260,10 +272,12 @@ class AuthViewModel @Inject constructor(
                         is Resource.Success -> {
                             _passwordResetState.value = Resource.success(Unit)
                         }
+
                         is Resource.Error -> {
                             Timber.e(resource.error?.cause, "Password reset failed")
                             _passwordResetState.value = resource
                         }
+
                         is Resource.Loading -> {
                             _passwordResetState.value = Resource.loading()
                         }
@@ -281,5 +295,10 @@ class AuthViewModel @Inject constructor(
         _loginState.value = Resource.success(null)
         _logoutState.value = Resource.success(Unit)
         _passwordResetState.value = Resource.success(Unit)
+    }
+
+    fun resetPasswordResetState() {
+        // Set to loading state initially to show email input form
+        _passwordResetState.value = Resource.loading()
     }
 }

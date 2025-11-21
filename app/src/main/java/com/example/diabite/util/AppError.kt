@@ -237,8 +237,79 @@ sealed class AppError(
          */
         fun fromFirebaseException(exception: Exception): AppError {
             val message = exception.message ?: "Unknown Firebase error"
-
+            
+            // Try to extract error code from FirebaseAuthException if available
+            try {
+                if (exception.javaClass.name.contains("FirebaseAuthException")) {
+                    val errorCodeMethod = exception.javaClass.getMethod("getErrorCode")
+                    val errorCode = errorCodeMethod.invoke(exception) as? String
+                    
+                    if (errorCode != null) {
+                        return when (errorCode) {
+                            "INVALID_LOGIN_CREDENTIALS" -> InvalidCredentialsError(message, exception)
+                            "INVALID_EMAIL" -> InvalidEmailError(message, exception)
+                            "USER_NOT_FOUND" -> UserNotFoundError(message, exception)
+                            "TOO_MANY_REQUESTS" -> AuthenticationError("Too many login attempts. Please try again later.", message, exception)
+                            "USER_DISABLED" -> AuthenticationError("This account has been disabled.", message, exception)
+                            "WEAK_PASSWORD" -> InvalidPasswordError(message, exception)
+                            "EMAIL_ALREADY_IN_USE" -> UserAlreadyExistsError(message, exception)
+                            else -> fallbackErrorMapping(message, exception)
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                // If reflection fails, fall through to message-based detection
+            }
+            
+            // Fallback to message-based detection
+            return fallbackErrorMapping(message, exception)
+        }
+        
+        private fun fallbackErrorMapping(message: String, exception: Exception): AppError {
             return when {
+                // Authentication errors - these are the most common login failures
+                message.contains("INVALID_LOGIN_CREDENTIALS", ignoreCase = true) ||
+                message.contains("INVALID_USER_OR_PASSWORD", ignoreCase = true) ||
+                message.contains("wrong password", ignoreCase = true) ||
+                message.contains("The password is invalid", ignoreCase = true) ||
+                message.contains("[INVALID_LOGIN_CREDENTIALS]", ignoreCase = true) ||
+                message.contains("Invalid credential", ignoreCase = true) ->
+                    InvalidCredentialsError(message, exception)
+                
+                message.contains("USER_NOT_FOUND", ignoreCase = true) ||
+                message.contains("user-not-found", ignoreCase = true) ||
+                message.contains("There is no user record", ignoreCase = true) ||
+                message.contains("[USER_NOT_FOUND]", ignoreCase = true) ||
+                message.contains("no user record", ignoreCase = true) ->
+                    UserNotFoundError(message, exception)
+                
+                message.contains("INVALID_EMAIL", ignoreCase = true) ||
+                message.contains("invalid-email", ignoreCase = true) ||
+                message.contains("[INVALID_EMAIL]", ignoreCase = true) ->
+                    InvalidEmailError(message, exception)
+                
+                message.contains("TOO_MANY_REQUESTS", ignoreCase = true) ||
+                message.contains("too-many-requests", ignoreCase = true) ||
+                message.contains("too many login attempts", ignoreCase = true) ||
+                message.contains("[TOO_MANY_REQUESTS]", ignoreCase = true) ->
+                    AuthenticationError("Too many login attempts. Please try again later.", message, exception)
+                
+                message.contains("USER_DISABLED", ignoreCase = true) ||
+                message.contains("user-disabled", ignoreCase = true) ||
+                message.contains("[USER_DISABLED]", ignoreCase = true) ->
+                    AuthenticationError("This account has been disabled.", message, exception)
+                
+                message.contains("WEAK_PASSWORD", ignoreCase = true) ||
+                message.contains("weak-password", ignoreCase = true) ||
+                message.contains("[WEAK_PASSWORD]", ignoreCase = true) ->
+                    InvalidPasswordError(message, exception)
+                
+                message.contains("EMAIL_ALREADY_IN_USE", ignoreCase = true) ||
+                message.contains("email-already-in-use", ignoreCase = true) ||
+                message.contains("[EMAIL_ALREADY_IN_USE]", ignoreCase = true) ->
+                    UserAlreadyExistsError(message, exception)
+                
+                // Firestore and general Firebase errors
                 message.contains("PERMISSION_DENIED") || message.contains("permission-denied") ->
                     FirebasePermissionError(message, exception)
                 message.contains("NOT_FOUND") || message.contains("not-found") ->
@@ -249,6 +320,13 @@ sealed class AppError(
                     ServerError(message, exception)
                 message.contains("DEADLINE_EXCEEDED") || message.contains("timeout") ->
                     TimeoutError(message, exception)
+                
+                // Network errors
+                message.contains("Network error", ignoreCase = true) ||
+                message.contains("no internet", ignoreCase = true) ||
+                message.contains("unable to connect", ignoreCase = true) ->
+                    NetworkError(message, exception)
+                
                 else -> UnknownError(message, exception, retryable = true)
             }
         }

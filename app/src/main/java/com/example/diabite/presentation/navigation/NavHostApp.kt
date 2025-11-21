@@ -19,6 +19,7 @@ import com.example.diabite.common.Route
 import com.example.diabite.presentation.home_screen.HomeScreen
 import com.example.diabite.presentation.screen.AISuggestionsUI
 import com.example.diabite.presentation.screen.FoodDetailScreen
+import com.example.diabite.presentation.screen.ForgotPasswordScreen
 import com.example.diabite.presentation.screen.GeminiScreen
 import com.example.diabite.presentation.screen.LoginScreen
 import com.example.diabite.presentation.screen.RegisterScreen
@@ -76,6 +77,10 @@ fun NavHostApp(authViewModel: AuthViewModel = hiltViewModel()) {
         }
         composable(Route.Signup) {
             RegisterScreen(navController = navController, viewModel = authViewModel)
+        }
+        
+        composable(Route.ForgotPassword) {
+            ForgotPasswordScreen(navController = navController, viewModel = authViewModel)
         }
 
         composable(Route.Home) {

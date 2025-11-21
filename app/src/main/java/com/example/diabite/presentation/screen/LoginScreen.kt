@@ -316,7 +316,7 @@ fun LoginScreen(navController: NavController, viewModel: AuthViewModel) {
                                 fontWeight = FontWeight.Medium
                             ),
                             modifier = Modifier.clickable {
-                                // TODO: Navigate to forgot password screen
+                                navController.navigate(Route.ForgotPassword)
                             }
                         )
 

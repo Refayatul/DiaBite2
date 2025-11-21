@@ -13,4 +13,5 @@ object Route {
     const val Gemini = "gemini"
     const val Settings = "settings"
     const val Detail = "detail"
+    const val ForgotPassword = "forgot_password"
 }
