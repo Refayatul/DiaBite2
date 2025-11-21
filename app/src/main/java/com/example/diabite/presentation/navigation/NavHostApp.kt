@@ -84,8 +84,12 @@ fun NavHostApp(authViewModel: AuthViewModel = hiltViewModel()) {
 
         composable("${Route.SearchFood}/{query}") { backStackEntry ->
             val query = backStackEntry.arguments?.getString("query") ?: ""
+            // Update the search query in the view model when navigating with a parameter
+            searchViewModel.updateSearchQuery(query)
             SearchScreen(
                 onFoodItemClick = { foodItem ->
+                    // Save the opened food item to history
+                    userViewModel.addSearchToHistory(foodItem.name)
                     navController.navigate("${Route.FoodDetail}/${foodItem.id}")
                 },
                 viewModel = searchViewModel,

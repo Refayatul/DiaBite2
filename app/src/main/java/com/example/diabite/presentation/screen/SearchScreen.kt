@@ -168,9 +168,6 @@ fun SearchScreen(
                         query = searchQuery,
                         onQueryChange = { viewModel.updateSearchQuery(it) },
                         onSearch = {
-                            if (searchQuery.isNotBlank()) {
-                                userViewModel.addSearchToHistory(searchQuery)
-                            }
                             focusManager.clearFocus()
                         },
                         onClear = { viewModel.clearSearch() }

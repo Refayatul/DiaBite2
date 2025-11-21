@@ -82,6 +82,11 @@ class SearchViewModel @Inject constructor(
         observeUserChanges()
         setupSearchFlow()
         observeAiProgress()
+
+        // If we have an initial query, trigger search immediately
+        if (initialQuery.isNotBlank()) {
+            performInitialSearch(initialQuery)
+        }
     }
 
     private fun observeAiProgress() {
@@ -230,6 +235,35 @@ class SearchViewModel @Inject constructor(
                         else -> Unit
                     }
                 }
+        }
+    }
+
+    private fun performInitialSearch(query: String) {
+        viewModelScope.launch {
+            _isLoading.value = true
+            _error.value = null
+            performSearch(query).collect { resource ->
+                _isLoading.value = resource is Resource.Loading
+                when (resource) {
+                    is Resource.Success -> {
+                        val foods = resource.data ?: emptyList()
+                        _searchResults.value = foodNormalizer.removeDuplicates(foods).sortedByDescending {
+                            foodNormalizer.getSearchRelevanceScore(query, it.name)
+                        }
+                        _isEmptyState.value = foods.isEmpty()
+                        // Show AI search option if no results found in database
+                        _canDoAISearch.value = foods.isEmpty()
+                    }
+                    is Resource.Error -> {
+                        _error.value = resource.error?.userMessage ?: "Search failed"
+                        _searchResults.value = emptyList()
+                        _isEmptyState.value = true
+                        // Allow AI search as fallback when database search fails
+                        _canDoAISearch.value = true
+                    }
+                    else -> Unit
+                }
+            }
         }
     }
 
