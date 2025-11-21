@@ -142,9 +142,6 @@ dependencies {
     implementation(libs.firebase.firestore)
     implementation(libs.firebase.functions)
 
-    // Google Play Services
-    implementation(libs.play.services.auth)
-
     // WorkManager
     implementation(libs.androidx.work.runtime.ktx)
 

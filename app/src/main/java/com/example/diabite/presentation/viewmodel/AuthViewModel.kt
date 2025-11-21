@@ -44,9 +44,6 @@ class AuthViewModel @Inject constructor(
     private val _loginState = MutableStateFlow<Resource<User?>>(Resource.loading())
     val loginState: StateFlow<Resource<User?>> = _loginState.asStateFlow()
 
-    private val _googleSignInState = MutableStateFlow<Resource<User?>>(Resource.loading())
-    val googleSignInState: StateFlow<Resource<User?>> = _googleSignInState.asStateFlow()
-
     private val _logoutState = MutableStateFlow<Resource<Unit>>(Resource.loading())
     val logoutState: StateFlow<Resource<Unit>> = _logoutState.asStateFlow()
 
@@ -191,44 +188,10 @@ class AuthViewModel @Inject constructor(
         }
     }
 
-    fun googleSignIn(idToken: String) {
-        if (idToken.isBlank()) {
-            _googleSignInState.value = Resource.error(AppError.MissingFieldError("idToken"))
-            return
-        }
-
-        _googleSignInState.value = Resource.loading()
-
-        viewModelScope.launch {
-            try {
-                authRepository.googleSignIn(idToken).collect { resource ->
-                    when (resource) {
-                        is Resource.Success -> {
-                            val googleUser = resource.data
-                            _currentUser.value = googleUser
-                            _googleSignInState.value = Resource.success(googleUser)
-                        }
-                        is Resource.Error -> {
-                            Timber.e(resource.error?.cause, "Google sign-in failed")
-                            _googleSignInState.value = Resource.error(resource.error!!, resource.data)
-                        }
-                        is Resource.Loading -> {
-                            _googleSignInState.value = Resource.loading()
-                        }
-                    }
-                }
-            } catch (e: Exception) {
-                Timber.e(e, "Google sign-in error")
-                _googleSignInState.value = Resource.firebaseError(e)
-            }
-        }
-    }
-
     fun logout() {
         // --- FIX: Reset login/signup states IMMEDIATELY to prevent navigation loops ---
         // This ensures that even if logout takes time or fails, the LoginScreen sees a clean state.
         _loginState.value = Resource.loading()
-        _googleSignInState.value = Resource.loading()
         _signUpState.value = Resource.loading()
         clearRegistrationData()
         
@@ -316,7 +279,6 @@ class AuthViewModel @Inject constructor(
     fun resetAuthState() {
         _signUpState.value = Resource.success(null)
         _loginState.value = Resource.success(null)
-        _googleSignInState.value = Resource.success(null)
         _logoutState.value = Resource.success(Unit)
         _passwordResetState.value = Resource.success(Unit)
     }

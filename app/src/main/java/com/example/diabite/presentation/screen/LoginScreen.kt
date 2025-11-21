@@ -1,9 +1,6 @@
 package com.example.diabite.presentation.screen
 
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.scaleIn
@@ -21,7 +18,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -49,11 +45,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -64,17 +57,12 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.example.diabite.R
 import com.example.diabite.common.Route
 import com.example.diabite.presentation.viewmodel.AuthViewModel
 import com.example.diabite.util.AppError
 import com.example.diabite.util.Resource
-import com.google.android.gms.auth.api.signin.GoogleSignIn
-import com.google.android.gms.auth.api.signin.GoogleSignInOptions
-import com.google.android.gms.common.api.ApiException
-import timber.log.Timber
 
 @Composable
 fun LoginScreen(navController: NavController, viewModel: AuthViewModel) {
@@ -88,39 +76,7 @@ fun LoginScreen(navController: NavController, viewModel: AuthViewModel) {
     var emailError by remember { mutableStateOf(false) }
     var passwordError by remember { mutableStateOf(false) }
 
-    val context = LocalContext.current
     val loginState by viewModel.loginState.collectAsState()
-
-    val googleSignInState by viewModel.googleSignInState.collectAsState()
-    var isGoogleSignInLoading by remember { mutableStateOf(false) }
-
-    val googleSignInLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.StartActivityForResult(),
-        onResult = {
-            val task = GoogleSignIn.getSignedInAccountFromIntent(it.data)
-            try {
-                val account = task.getResult(ApiException::class.java)
-                if (account != null && account.idToken != null) {
-                    viewModel.googleSignIn(account.idToken!!)
-                } else {
-                    // Reset loading state and show error
-                    viewModel.resetAuthState()
-                }
-            }
-            catch (e: ApiException) {
-                Timber.e(e, "Google Sign-In failed")
-                // Reset loading state and show error
-                viewModel.resetAuthState()
-            }
-        }
-    )
-
-    val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-        .requestIdToken(context.getString(R.string.default_web_client_id))
-        .requestEmail()
-        .build()
-
-    val googleSignInClient = GoogleSignIn.getClient(context, gso)
 
     // Handle login state changes
     LaunchedEffect(loginState) {
@@ -134,25 +90,6 @@ fun LoginScreen(navController: NavController, viewModel: AuthViewModel) {
             is Resource.Error<*> -> {
                 isLoginInProgress = false
                 // Error is handled in the UI below
-            }
-            else -> {}
-        }
-    }
-
-    // Handle Google sign-in state changes
-    LaunchedEffect(googleSignInState) {
-        when (googleSignInState) {
-            is Resource.Success<*> -> {
-                isGoogleSignInLoading = false
-                navController.navigate(Route.Home) {
-                    popUpTo(Route.Login) { inclusive = true }
-                }
-            }
-            is Resource.Error<*> -> {
-                isGoogleSignInLoading = false
-                // Error is handled in the UI below
-                // Reset the state after showing error
-                viewModel.resetAuthState()
             }
             else -> {}
         }
@@ -349,69 +286,6 @@ fun LoginScreen(navController: NavController, viewModel: AuthViewModel) {
                             } else {
                                 Text("Login", fontWeight = FontWeight.Bold) // Bolder text
                             }
-                        }
-
-                        // Google Sign-In Button
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Button(
-                            onClick = {
-                                isGoogleSignInLoading = true
-                                googleSignInLauncher.launch(googleSignInClient.signInIntent)
-                            },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(56.dp), // Increased height
-                            colors = ButtonDefaults.buttonColors( // Custom button color
-                                containerColor = MaterialTheme.colorScheme.surfaceVariant, // Use surface variant for Google button
-                                contentColor = MaterialTheme.colorScheme.onSurfaceVariant
-                            ),
-                            border = androidx.compose.foundation.BorderStroke( // Custom border
-                                width = 1.dp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            ),
-                            elevation = ButtonDefaults.buttonElevation( // Custom elevation
-                                defaultElevation = 4.dp,
-                                pressedElevation = 6.dp
-                            ),
-                            enabled = !isGoogleSignInLoading
-                        ) {
-                            if (isGoogleSignInLoading) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(20.dp),
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    "Signing in...",
-                                    style = MaterialTheme.typography.bodyLarge.copy(
-                                        fontWeight = FontWeight.Medium
-                                    )
-                                )
-                            } else {
-                                Text(
-                                    "Continue with Google",
-                                    style = MaterialTheme.typography.bodyLarge.copy(
-                                        fontWeight = FontWeight.Medium
-                                    )
-                                )
-                            }
-                        }
-
-                        // Google Sign-In Error message
-                        if (googleSignInState is Resource.Error<*>) {
-                            Spacer(modifier = Modifier.height(8.dp))
-                            val googleError = (googleSignInState as Resource.Error<*>).error
-                            val googleErrorMessage = when (googleError) {
-                                is AppError.NetworkError -> "Network error. Please check your connection"
-                                else -> googleError?.userMessage ?: "Google sign-in failed. Please try again"
-                            }
-                            Text(
-                                text = googleErrorMessage,
-                                color = MaterialTheme.colorScheme.error,
-                                style = MaterialTheme.typography.bodySmall,
-                                textAlign = TextAlign.Center,
-                                modifier = Modifier.fillMaxWidth()
-                            )
                         }
 
                         // Error message

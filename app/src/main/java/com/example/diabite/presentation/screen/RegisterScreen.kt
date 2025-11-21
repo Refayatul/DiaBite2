@@ -1,7 +1,5 @@
 package com.example.diabite.presentation.screen
 
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -18,7 +16,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -40,6 +37,7 @@ import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -54,22 +52,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
-import com.example.diabite.R
 import com.example.diabite.common.Route
 import com.example.diabite.presentation.viewmodel.AuthViewModel
 import com.example.diabite.util.Resource
-import com.google.android.gms.auth.api.signin.GoogleSignIn
-import com.google.android.gms.auth.api.signin.GoogleSignInOptions
-import com.google.android.gms.common.api.ApiException
-import timber.log.Timber
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -96,53 +87,6 @@ fun RegisterScreen(navController: NavController, viewModel: AuthViewModel) {
         "Diabetes Type 1",
         "Diabetes Type 2"
     )
-
-    val context = LocalContext.current
-    val googleSignInState by viewModel.googleSignInState.collectAsState()
-    var isGoogleSignInLoading by remember { mutableStateOf(false) }
-
-    val googleSignInLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.StartActivityForResult(),
-        onResult = {
-            val task = GoogleSignIn.getSignedInAccountFromIntent(it.data)
-            try {
-                val account = task.getResult(ApiException::class.java)
-                if (account != null && account.idToken != null) {
-                    viewModel.googleSignIn(account.idToken!!)
-                } else {
-                    viewModel.resetAuthState()
-                }
-            } catch (e: ApiException) {
-                Timber.e(e, "Google Sign-In failed")
-                viewModel.resetAuthState()
-            }
-        }
-    )
-
-    val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-        .requestIdToken(context.getString(R.string.default_web_client_id))
-        .requestEmail()
-        .build()
-
-    val googleSignInClient = GoogleSignIn.getClient(context, gso)
-
-    // Handle Google sign-in state changes
-    LaunchedEffect(googleSignInState) {
-        when (googleSignInState) {
-            is Resource.Success<*> -> {
-                isGoogleSignInLoading = false
-                // FIX: Explicitly navigate to Home on success
-                navController.navigate(Route.Home) {
-                    popUpTo(Route.Login) { inclusive = true }
-                }
-            }
-            is Resource.Error<*> -> {
-                isGoogleSignInLoading = false
-                viewModel.resetAuthState()
-            }
-            else -> {}
-        }
-    }
 
     // Handle Email sign-up state
     LaunchedEffect(signUpState) {
@@ -374,7 +318,7 @@ fun RegisterScreen(navController: NavController, viewModel: AuthViewModel) {
                                 trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = typeExpanded) },
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .menuAnchor(),
+                                    .menuAnchor(MenuAnchorType.PrimaryNotEditable, true),
                                 isError = typeError,
                                 supportingText = { if (typeError) Text("Please select your diabetes type") },
                                 colors = TextFieldDefaults.colors( // Custom colors for dropdown
@@ -448,69 +392,6 @@ fun RegisterScreen(navController: NavController, viewModel: AuthViewModel) {
                                 color = MaterialTheme.colorScheme.error,
                                 style = MaterialTheme.typography.bodySmall,
                                 modifier = Modifier.padding(top = 8.dp)
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.height(16.dp))
-                        
-                        // Google Sign In Button
-                        Button(
-                            onClick = {
-                                isGoogleSignInLoading = true
-                                googleSignInLauncher.launch(googleSignInClient.signInIntent)
-                            },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(56.dp), // Increased height
-                            colors = ButtonDefaults.buttonColors( // Custom button color
-                                containerColor = MaterialTheme.colorScheme.surfaceVariant, // Use surface variant for Google button
-                                contentColor = MaterialTheme.colorScheme.onSurfaceVariant
-                            ),
-                            border = androidx.compose.foundation.BorderStroke( // Custom border
-                                width = 1.dp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            ),
-                            elevation = ButtonDefaults.buttonElevation( // Custom elevation
-                                defaultElevation = 4.dp,
-                                pressedElevation = 6.dp
-                            ),
-                            enabled = !isGoogleSignInLoading
-                        ) {
-                            if (isGoogleSignInLoading) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(20.dp),
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    "Signing in...",
-                                    style = MaterialTheme.typography.bodyLarge.copy(
-                                        fontWeight = FontWeight.Medium
-                                    )
-                                )
-                            } else {
-                                Text(
-                                    "Continue with Google",
-                                    style = MaterialTheme.typography.bodyLarge.copy(
-                                        fontWeight = FontWeight.Medium
-                                    )
-                                )
-                            }
-                        }
-
-                        if (googleSignInState is Resource.Error<*>) {
-                            Spacer(modifier = Modifier.height(8.dp))
-                            val googleError = (googleSignInState as Resource.Error<*>).error
-                            val googleErrorMessage = when (googleError) {
-                                is com.example.diabite.util.AppError.NetworkError -> "Network error. Please check your connection"
-                                else -> googleError?.userMessage ?: "Google sign-in failed. Please try again"
-                            }
-                            Text(
-                                text = googleErrorMessage,
-                                color = MaterialTheme.colorScheme.error,
-                                style = MaterialTheme.typography.bodySmall,
-                                textAlign = TextAlign.Center,
-                                modifier = Modifier.fillMaxWidth()
                             )
                         }
 

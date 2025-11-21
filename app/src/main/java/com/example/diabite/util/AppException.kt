@@ -19,7 +19,6 @@ sealed class AppException(
         class AccountDisabled(message: String = "Account has been disabled") : AuthException(message)
         class TooManyRequests(message: String = "Too many login attempts. Try again later") : AuthException(message)
         class NetworkError(message: String = "Network connection error", cause: Throwable? = null) : AuthException(message, cause)
-        class GoogleSignInFailed(message: String = "Google sign-in failed", cause: Throwable? = null) : AuthException(message, cause)
     }
 
     // Network Exceptions
@@ -123,7 +122,6 @@ sealed class AppException(
                 is AuthException.AccountDisabled -> "This account has been disabled. Please contact support."
                 is AuthException.TooManyRequests -> "Too many login attempts. Please wait a few minutes and try again."
                 is AuthException.NetworkError -> "Network connection error. Please check your internet and try again."
-                is AuthException.GoogleSignInFailed -> "Google sign-in failed. Please try again."
 
                 is NetworkException.NoInternet -> "No internet connection. Please check your network and try again."
                 is NetworkException.Timeout -> "Request timed out. Please try again."
