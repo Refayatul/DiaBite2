@@ -13,3 +13,5 @@
 .externalNativeBuild
 .cxx
 local.properties
+seed/node_modules/
+seed/serviceAccountKey.json

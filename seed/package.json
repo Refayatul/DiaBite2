@@ -1,0 +1,12 @@
+{
+  "name": "diabite",
+  "version": "1.0.0",
+  "description": "Upload food data to Firebase Firestore",
+  "main": "upload-data.js",
+  "scripts": {
+    "upload": "node upload-data.js"
+  },
+  "dependencies": {
+    "firebase-admin": "^11.8.0"
+  }
+}

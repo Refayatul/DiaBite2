@@ -1,45 +1,48 @@
 import java.util.Properties
-import java.io.File
-
-// Read local.properties before the plugins block
-val localProperties = Properties().apply {
-    val localPropertiesFile = File(project.rootProject.rootDir, "local.properties")
-    if (localPropertiesFile.exists()) {
-        localPropertiesFile.inputStream().use { load(it) }
-    }
-}
 
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
-    alias(libs.plugins.kotlin.compose)
-    id("com.google.devtools.ksp") version "2.2.0-2.0.2"
+    alias(libs.plugins.hilt)
+    alias(libs.plugins.ksp)
+    alias(libs.plugins.kotlin.compose.compiler)
+    alias(libs.plugins.google.services)
+}
+
+// Load local.properties
+val localProperties = Properties()
+val localPropertiesFile = rootProject.file("local.properties")
+if (localPropertiesFile.exists()) {
+    localProperties.load(localPropertiesFile.inputStream())
 }
 
 android {
-    namespace = "com.rex.diabite"
+    namespace = "com.example.diabite"
     compileSdk = 36
 
+    signingConfigs {
+        getByName("debug") {
+            // Optional: Configure debug signing if needed
+        }
+    }
+
     defaultConfig {
-        applicationId = "com.rex.diabite"
-        minSdk = 24
+
+        minSdk = 26
         targetSdk = 36
         versionCode = 1
         versionName = "1.0"
+
+        val geminiApiKey = localProperties.getProperty("GEMINI_API_KEY")
+        if (geminiApiKey.isNullOrBlank()) {
+            throw GradleException("GEMINI_API_KEY not found or is empty in local.properties.")
+        }
+        buildConfigField("String", "GEMINI_API_KEY", "\"$geminiApiKey\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
             useSupportLibrary = true
         }
-
-        // Provide a default value if FDC_API_KEY is not found
-        val apiKey = localProperties.getProperty("FDC_API_KEY", "YOUR_API_KEY_HERE")
-        buildConfigField("String", "FDC_API_KEY", "\"$apiKey\"")
-
-        // In the defaultConfig block, replace the Gemini API key section with:
-        // Add Gemini API key
-        val geminiApiKey = localProperties.getProperty("GEMINI_API_KEY", "YOUR_GEMINI_API_KEY_HERE")
-        buildConfigField("String", "GEMINI_API_KEY", "\"$geminiApiKey\"")
     }
 
     buildTypes {
@@ -50,69 +53,102 @@ android {
                 "proguard-rules.pro"
             )
         }
+        debug {
+            signingConfig = signingConfigs.getByName("debug")
+            isDebuggable = true
+        }
     }
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
-    }
-    kotlinOptions {
-        jvmTarget = "11"
-    }
+
     buildFeatures {
         compose = true
         buildConfig = true
     }
-    composeOptions {
-        kotlinCompilerExtensionVersion = "1.5.15"
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_11
+        targetCompatibility = JavaVersion.VERSION_11
     }
-    packaging {
-        resources {
-            excludes += "/META-INF/{AL2.0,LGPL2.1}"
+
+    kotlin {
+        compilerOptions {
+            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11)
         }
+    }
+
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true // Fixes native library stripping warnings
+        }
+        resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
+        // Suppress warnings about specific native libraries
+        resources.excludes += "**/libandroidx.graphics.path.so"
+        resources.excludes += "**/libdatastore_shared_counter.so"
     }
 }
 
 dependencies {
+    // Core
     implementation(libs.androidx.core.ktx)
-    implementation(libs.androidx.lifecycle.runtime.ktx)
-    implementation(libs.androidx.activity.compose)
-    implementation(platform(libs.androidx.compose.bom))
-    implementation(libs.androidx.compose.ui)
-    implementation(libs.androidx.compose.ui.graphics)
-    implementation(libs.androidx.compose.ui.tooling.preview)
-    implementation(libs.androidx.compose.material3)
-    implementation(libs.androidx.compose.material.icons.extended)
-    implementation(libs.barcode.scanning)
-    // ViewModel
-    implementation(libs.androidx.lifecycle.viewmodel.compose)
-    implementation(libs.androidx.lifecycle.runtime.compose)
+    implementation(libs.androidx.appcompat)
+    implementation(libs.material)
 
-    // Navigation
-    implementation(libs.androidx.navigation.compose)
+    // Compose BOM
+    implementation(platform(libs.compose.bom))
+    implementation(libs.compose.ui)
+    implementation(libs.compose.graphics)
+    implementation(libs.compose.tooling.preview)
+    implementation(libs.compose.material3)
+    implementation(libs.material.icons.extended)
 
-    // Room with KSP
-    implementation(libs.androidx.room.runtime)
-    implementation(libs.androidx.room.ktx)
-    ksp(libs.androidx.room.compiler)
+    // Compose dependencies
+    implementation(libs.activity.compose)
+    implementation(libs.navigation.compose)
 
-    // Retrofit
-    implementation(libs.retrofit)
-    implementation(libs.converter.moshi)
-    implementation(libs.logging.interceptor)
+    // Lifecycle
+    implementation(libs.lifecycle.runtime.ktx)
+    implementation(libs.lifecycle.viewmodel.compose)
 
-    // Moshi
-    implementation(libs.moshi)
-    implementation(libs.moshi.kotlin)
-    ksp(libs.moshi.kotlin.codegen)
+    // Room
+    implementation(libs.room.runtime)
+    ksp(libs.room.compiler)
+    implementation(libs.room.ktx)
 
-    // Coroutines
-    implementation(libs.kotlinx.coroutines.android)
+    // Coil for Compose
+    implementation(libs.coil.compose)
 
+    // Gson
+    implementation(libs.gson)
+
+    // Gemini AI - FIXED: Use version catalog instead of hardcoded dependency
+    implementation(libs.gemini.ai)
+
+    // Hilt
+    implementation(libs.hilt)
+    ksp(libs.hilt.compiler)
+    implementation(libs.hilt.lifecycle.viewmodel.compose)
+
+    // Timber
+    implementation(libs.timber)
+
+    // Firebase - FIXED: Use correct dependencies with BoM
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.auth)
+    implementation(libs.firebase.analytics) // Added missing analytics
+    implementation(libs.firebase.firestore)
+    implementation(libs.firebase.functions)
+
+    // Google Play Services
+    implementation(libs.play.services.auth)
+
+    // WorkManager
+    implementation(libs.androidx.work.runtime.ktx)
+
+    // Testing
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
-    androidTestImplementation(platform(libs.androidx.compose.bom))
-    androidTestImplementation(libs.androidx.compose.ui.test.junit4)
-    debugImplementation(libs.androidx.compose.ui.tooling)
-    debugImplementation(libs.androidx.compose.ui.test.manifest)
+    androidTestImplementation(platform(libs.compose.bom))
+    androidTestImplementation(libs.compose.ui.test.junit4)
+    debugImplementation(libs.compose.tooling)
+    debugImplementation(libs.compose.test.manifest)
 }

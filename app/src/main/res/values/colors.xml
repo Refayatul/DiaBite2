@@ -7,11 +7,4 @@
     <color name="teal_700">#FF018786</color>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
-
-    <!-- Diabetes-specific colors -->
-    <color name="safe_green">#FF4CAF50</color>
-    <color name="small_portion_yellow">#FFFFEB3B</color>
-    <color name="limit_orange">#FFFF9800</color>
-    <color name="avoid_red">#FFF44336</color>
-    <color name="unknown_gray">#FF9E9E9E</color>
 </resources>
